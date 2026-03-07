@@ -1,0 +1,255 @@
+openapi: 3.0.0
+info:
+  title: Northbound - Order Creation SaaS API
+  description: |
+    A SaaS API for generating and managing standardized UBL 2.1 Order documents.
+    This service facilitates the procurement process between Buyer and Seller parties.
+  version: 1.0.0
+
+servers:
+  - url: https://api.northbound-procure.com/v1
+    description: Production server
+
+paths:
+  /health:
+    get:
+      summary: Service Health Check
+      description: Returns the aliveness status and uptime of the service.
+      responses:
+        '200':
+          description: Service is operational
+          content:
+            application/json:
+              example:
+                status: "UP"
+                uptime: "12h 30m"
+                version: "1.0.0"
+        '503':
+          description: Service Unavailable (Database or Engine down)
+
+  /auth/login:
+    post:
+      summary: User Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userID:
+                    type: number
+                  token:
+                    type: string
+        '400':
+          description: Missing fields
+        '401':
+          description: Invalid credentials
+
+  /auth/register:
+    post:
+      summary: User Registration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                passwordConfirm:
+                  type: string
+      responses:
+        '200':
+          description: User created
+        '400':
+          description: Missing fields
+
+  /orders/generate:
+    post:
+      summary: Generate UBL Order
+      description: Converts raw JSON data into a standardized UBL 2.1 XML string.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sellerID:
+                  type: string
+                orderData:
+                  type: object
+                totalAmount:
+                  type: number
+      responses:
+        '201':
+          description: UBL XML Generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  xml:
+                    type: string
+                  orderID:
+                    type: string
+                    format: uuid
+        '400':
+          description: Missing UBL mandatory fields
+        '422':
+          description: UBL Schema validation failure
+
+  /orders:
+    get:
+      summary: List Orders
+      parameters:
+        - name: userID
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: role
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of order objects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderObject'
+        '401':
+          description: Unauthorized access
+
+  /orders/{orderID}/change:
+    put:
+      summary: Change Order
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                updatedData:
+                  type: object
+      responses:
+        '200':
+          description: Updated UBL_XML document
+        '403':
+          description: Order already registered/finalized
+        '404':
+          description: Order not found
+
+  /orders/{orderID}/cancel:
+    post:
+      summary: Cancel Order
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Order cancelled
+        '409':
+          description: Conflict (e.g., Despatch Advice already generated)
+
+  /orders/{orderID}/response:
+    post:
+      summary: Submit Order Response
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [ACCEPT, REJECT]
+      responses:
+        '200':
+          description: OrderResponse UBL document generated
+        '400':
+          description: Invalid status code
+
+  /orders/{orderID}/detail:
+    patch:
+      summary: Add Order Detail
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                additionalInfo:
+                  type: object
+      responses:
+        '200':
+          description: OrderObject updated
+        '404':
+          description: Order not found
+
+components:
+  schemas:
+    OrderObject:
+      type: object
+      properties:
+        orderID:
+          type: string
+          format: uuid
+        status:
+          type: string
+        xml:
+          type: string
+        totalAmount:
+          type: number
