@@ -1,25 +1,36 @@
+import { describe, expect, it } from '@jest/globals';
 import { validateOrderInput } from './validateOrderInput';
 
 describe('validateOrderInput', () => {
   const validBody = {
     buyer: {
-      partyId: 'BUYER-001',
-      partyName: 'Example Buyer Pty Ltd',
-      countryCode: 'AU',
+      external_id: 'BUYER-001',
+      name: 'Example Buyer Pty Ltd',
+      email: 'buyer@example.com',
+      street: '123 Market Street',
+      city: 'Sydney',
+      country: 'AU',
+      postal_code: '2000',
     },
     seller: {
-      partyId: 'SELLER-001',
-      partyName: 'Example Seller Pty Ltd',
-      countryCode: 'AU',
+      external_id: 'SELLER-001',
+      name: 'Example Seller Pty Ltd',
+      email: 'seller@example.com',
+      street: '456 George Street',
+      city: 'Melbourne',
+      country: 'AU',
+      postal_code: '3000',
     },
-    currencyCode: 'AUD',
-    orderLines: [
+    currency: 'AUD',
+    issue_date: '2026-03-13',
+    order_note: 'Urgent delivery please',
+    order_lines: [
       {
-        lineNumber: 1,
-        itemId: 'SKU-123',
+        line_id: '1',
         description: 'Wireless Keyboard',
         quantity: 2,
-        unitPrice: 49.99,
+        unit_price: 49.99,
+        unit_code: 'EA',
       },
     ],
   };
@@ -30,7 +41,7 @@ describe('validateOrderInput', () => {
   });
 
   it('returns an error when body is not an object', () => {
-    const errors = validateOrderInput(null);
+    const errors = validateOrderInput(undefined);
 
     expect(errors).toEqual([
       {
@@ -57,10 +68,13 @@ describe('validateOrderInput', () => {
     );
   });
 
-  it('returns an error when orderLines is empty', () => {
+  it('returns an error when buyer.external_id is missing', () => {
     const invalidBody = {
       ...validBody,
-      orderLines: [],
+      buyer: {
+        ...validBody.buyer,
+        external_id: '',
+      },
     };
 
     const errors = validateOrderInput(invalidBody);
@@ -68,8 +82,42 @@ describe('validateOrderInput', () => {
     expect(errors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          field: 'orderLines',
-          message: 'orderLines must contain at least one item',
+          field: 'buyer.external_id',
+        }),
+      ])
+    );
+  });
+
+  it('returns an error when issue_date is invalid', () => {
+    const invalidBody = {
+      ...validBody,
+      issue_date: '13-03-2026',
+    };
+
+    const errors = validateOrderInput(invalidBody);
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'issue_date',
+        }),
+      ])
+    );
+  });
+
+  it('returns an error when order_lines is empty', () => {
+    const invalidBody = {
+      ...validBody,
+      order_lines: [],
+    };
+
+    const errors = validateOrderInput(invalidBody);
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'order_lines',
+          message: 'order_lines must contain at least one item',
         }),
       ])
     );
@@ -78,9 +126,9 @@ describe('validateOrderInput', () => {
   it('returns an error when quantity is invalid', () => {
     const invalidBody = {
       ...validBody,
-      orderLines: [
+      order_lines: [
         {
-          ...validBody.orderLines[0],
+          ...validBody.order_lines[0],
           quantity: -1,
         },
       ],
@@ -91,9 +139,48 @@ describe('validateOrderInput', () => {
     expect(errors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          field: 'orderLines[0].quantity',
+          field: 'order_lines[0].quantity',
         }),
       ])
     );
   });
+
+  it('returns an error when unit_price is invalid', () => {
+    const invalidBody = {
+      ...validBody,
+      order_lines: [
+        {
+          ...validBody.order_lines[0],
+          unit_price: -10,
+        },
+      ],
+    };
+
+    const errors = validateOrderInput(invalidBody);
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'order_lines[0].unit_price',
+        }),
+      ])
+    );
+  });
+  
+  it('returns an error when seller is missing', () => {
+  const invalidBody = {
+    ...validBody,
+    seller: undefined,
+  };
+
+  const errors = validateOrderInput(invalidBody);
+
+  expect(errors).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        field: 'seller',
+      }),
+    ])
+  );
+});
 });

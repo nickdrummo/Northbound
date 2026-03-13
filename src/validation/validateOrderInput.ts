@@ -21,6 +21,34 @@ function isNonNegativeNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
+function isValidDateString(value: unknown): value is string {
+  if (!isNonEmptyString(value)) {
+    return false;
+  }
+
+  // simple YYYY-MM-DD check
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!datePattern.test(value)) {
+    return false;
+  }
+
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime());
+}
+
+function validateOptionalString(
+  value: unknown,
+  fieldPath: string,
+  errors: ValidationError[]
+): void {
+  if (value !== undefined && !isNonEmptyString(value)) {
+    errors.push({
+      field: fieldPath,
+      message: `${fieldPath} must be a non-empty string when provided`,
+    });
+  }
+}
+
 function validateParty(
   fieldName: 'buyer' | 'seller',
   value: unknown,
@@ -34,26 +62,25 @@ function validateParty(
     return;
   }
 
-  if (!isNonEmptyString(value.partyId)) {
+  if (!isNonEmptyString(value.external_id)) {
     errors.push({
-      field: `${fieldName}.partyId`,
-      message: `${fieldName}.partyId is required`,
+      field: `${fieldName}.external_id`,
+      message: `${fieldName}.external_id is required`,
     });
   }
 
-  if (!isNonEmptyString(value.partyName)) {
+  if (!isNonEmptyString(value.name)) {
     errors.push({
-      field: `${fieldName}.partyName`,
-      message: `${fieldName}.partyName is required`,
+      field: `${fieldName}.name`,
+      message: `${fieldName}.name is required`,
     });
   }
 
-  if (!isNonEmptyString(value.countryCode)) {
-    errors.push({
-      field: `${fieldName}.countryCode`,
-      message: `${fieldName}.countryCode is required`,
-    });
-  }
+  validateOptionalString(value.email, `${fieldName}.email`, errors);
+  validateOptionalString(value.street, `${fieldName}.street`, errors);
+  validateOptionalString(value.city, `${fieldName}.city`, errors);
+  validateOptionalString(value.country, `${fieldName}.country`, errors);
+  validateOptionalString(value.postal_code, `${fieldName}.postal_code`, errors);
 }
 
 function validateOrderLine(
@@ -61,7 +88,7 @@ function validateOrderLine(
   index: number,
   errors: ValidationError[]
 ): void {
-  const prefix = `orderLines[${index}]`;
+  const prefix = `order_lines[${index}]`;
 
   if (!isPlainObject(value)) {
     errors.push({
@@ -71,21 +98,10 @@ function validateOrderLine(
     return;
   }
 
-  if (
-    typeof value.lineNumber !== 'number' ||
-    !Number.isInteger(value.lineNumber) ||
-    value.lineNumber <= 0
-  ) {
+  if (!isNonEmptyString(value.line_id)) {
     errors.push({
-      field: `${prefix}.lineNumber`,
-      message: `${prefix}.lineNumber must be a positive integer`,
-    });
-  }
-
-  if (!isNonEmptyString(value.itemId)) {
-    errors.push({
-      field: `${prefix}.itemId`,
-      message: `${prefix}.itemId is required`,
+      field: `${prefix}.line_id`,
+      message: `${prefix}.line_id is required`,
     });
   }
 
@@ -103,12 +119,14 @@ function validateOrderLine(
     });
   }
 
-  if (!isNonNegativeNumber(value.unitPrice)) {
+  if (!isNonNegativeNumber(value.unit_price)) {
     errors.push({
-      field: `${prefix}.unitPrice`,
-      message: `${prefix}.unitPrice must be a non-negative number`,
+      field: `${prefix}.unit_price`,
+      message: `${prefix}.unit_price must be a non-negative number`,
     });
   }
+
+  validateOptionalString(value.unit_code, `${prefix}.unit_code`, errors);
 }
 
 export function validateOrderInput(body: unknown): ValidationError[] {
@@ -141,25 +159,34 @@ export function validateOrderInput(body: unknown): ValidationError[] {
     validateParty('seller', body.seller, errors);
   }
 
-  if (!isNonEmptyString(body.currencyCode)) {
+  if (!isNonEmptyString(body.currency)) {
     errors.push({
-      field: 'currencyCode',
-      message: 'currencyCode is required',
+      field: 'currency',
+      message: 'currency is required',
     });
   }
 
-  if (!Array.isArray(body.orderLines)) {
+  if (!isValidDateString(body.issue_date)) {
     errors.push({
-      field: 'orderLines',
-      message: 'orderLines is required and must be an array',
+      field: 'issue_date',
+      message: 'issue_date is required and must be a valid YYYY-MM-DD date',
     });
-  } else if (body.orderLines.length === 0) {
+  }
+
+  validateOptionalString(body.order_note, 'order_note', errors);
+
+  if (!Array.isArray(body.order_lines)) {
     errors.push({
-      field: 'orderLines',
-      message: 'orderLines must contain at least one item',
+      field: 'order_lines',
+      message: 'order_lines is required and must be an array',
+    });
+  } else if (body.order_lines.length === 0) {
+    errors.push({
+      field: 'order_lines',
+      message: 'order_lines must contain at least one item',
     });
   } else {
-    body.orderLines.forEach((line, index) => {
+    body.order_lines.forEach((line, index) => {
       validateOrderLine(line, index, errors);
     });
   }
