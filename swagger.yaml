@@ -36,10 +36,6 @@ paths:
           description: Service is operational
           schema:
             $ref: '#/definitions/HealthResponse'
-        503:
-          description: Service unavailable
-          schema:
-            $ref: '#/definitions/StandardErrorResponse'
 
   /auth/login:
     post:
