@@ -1,5 +1,5 @@
 import { XMLBuilder } from 'fast-xml-parser';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { OrderInput, UBLResult } from './order.types';
 
 const builder = new XMLBuilder({
@@ -9,7 +9,7 @@ const builder = new XMLBuilder({
 });
 
 export function generateUBL(input: OrderInput): UBLResult {
-  const orderID = uuidv4();
+  const orderID = randomUUID();
 
   const ublObject = {
     Order: {
