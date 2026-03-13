@@ -125,6 +125,7 @@ describe('POST /auth/login', () => {
     expect(res2.status).toBe(200);
     expect(typeof token1).toBe('string');
     expect(typeof token2).toBe('string');
+    expect(token1).not.toBe(token2);
   });
 
   test('falls back to 500 when JWT secret is empty', async () => {

@@ -76,7 +76,10 @@ export function login(email: string, password: string): AuthToken {
   }
 
   const token = jwt.sign(
-    { userID: user.userID },
+    {
+      userID: user.userID,
+      issuedAt: Date.now(),
+    },
     secret,
     { expiresIn: '1h' }
   );
