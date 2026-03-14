@@ -1,6 +1,6 @@
 import express from 'express';
 import { login, register } from './auth';
-import { AppError, ErrorDetail, fail, ok } from '../errors';
+import { AppError, type ErrorDetail, fail, ok } from '../errors';
 
 const router = express.Router();
 
@@ -14,21 +14,21 @@ router.post('/auth/login', (req, res) => {
         token: authToken.token,
       })
     );
-  } catch (err) {
-    if (err instanceof AppError) {
-      const status = err.status;
+  } catch (err: unknown) {
+    const appErr = err instanceof AppError ? err : null;
+    if (appErr) {
       const detail: ErrorDetail = {
-        code: err.code,
-        message: err.message,
+        code: appErr.code,
+        message: appErr.message,
       };
-      return res.status(status).json(fail(err.message, detail));
+      return res.status(appErr.status).json(fail(appErr.message, detail));
     }
 
     const detail: ErrorDetail = {
       code: 'INTERNAL_SERVER_ERROR',
       message: 'An unexpected error occurred.',
     };
-      return res.status(500).json(fail(detail.message, detail));
+    return res.status(500).json(fail(detail.message, detail));
   }
 });
 
@@ -52,14 +52,14 @@ router.post('/auth/register', (req, res) => {
         token: authToken.token,
       })
     );
-  } catch (err) {
-    if (err instanceof AppError) {
-      const status = err.status;
+  } catch (err: unknown) {
+    const appErr = err instanceof AppError ? err : null;
+    if (appErr) {
       const detail: ErrorDetail = {
-        code: err.code,
-        message: err.message,
+        code: appErr.code,
+        message: appErr.message,
       };
-      return res.status(status).json(fail(err.message, detail));
+      return res.status(appErr.status).json(fail(appErr.message, detail));
     }
 
     const detail: ErrorDetail = {
