@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import authRouter from './auth/routes';
+import { ok } from './errors'
 
 dotenv.config();
 
@@ -10,15 +11,12 @@ app.use(express.json());
 app.use(authRouter);
 
 app.get('/health', (_req, res) => {
-  return res.json({
-    success: true,
-    message: 'Service is operational.',
-    data: {
+  return res.json(
+    ok('Service is operational.', {
       status: 'UP',
       version: '1.0.0',
-    },
-    error: null,
-  });
+    })
+  );
 });
 
 const port = Number(process.env.PORT) || 3000;
@@ -31,4 +29,3 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 export default app;
-

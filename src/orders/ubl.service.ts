@@ -1,6 +1,6 @@
 import { XMLBuilder } from 'fast-xml-parser';
 import { randomUUID } from 'crypto';
-import { OrderInput, UBLResult } from './order.types';
+import { OrderInput, UBLResult, Party, OrderLine } from './order.types';
 
 const builder = new XMLBuilder({
   ignoreAttributes: false,
@@ -10,6 +10,11 @@ const builder = new XMLBuilder({
 
 export function generateUBL(input: OrderInput): UBLResult {
   const orderID = randomUUID();
+
+  const totalAmount = input.order_lines.reduce(
+    (sum, line) => sum + line.quantity * line.unit_price,
+    0
+  );
 
   const ublObject = {
     Order: {
@@ -23,15 +28,19 @@ export function generateUBL(input: OrderInput): UBLResult {
       'cbc:Note': input.order_note ?? '',
       'cac:BuyerCustomerParty': buildParty(input.buyer),
       'cac:SellerSupplierParty': buildParty(input.seller),
-      'cac:OrderLine': input.order_lines.map((line, index) => buildOrderLine(line, index)),
+      'cac:OrderLine': input.order_lines.map((line, index) =>
+        buildOrderLine(line, index, input.currency)
+      ),
       'cbc:TaxInclusiveAmount': {
         '@_currencyID': input.currency,
-        '#text': input.totalAmount,
+        '#text': totalAmount,
       },
     },
   };
 
-  const ubl_xml = `<?xml version="1.0" encoding="UTF-8"?>\n` + builder.build(ublObject);
+  const ubl_xml =
+    '<?xml version="1.0" encoding="UTF-8"?>\n' + builder.build(ublObject);
+
   return { orderID, ubl_xml };
 }
 
@@ -57,7 +66,7 @@ function buildParty(party: Party) {
   };
 }
 
-function buildOrderLine(line: OrderLine, index: number) {
+function buildOrderLine(line: OrderLine, index: number, currency: string) {
   return {
     'cac:LineItem': {
       'cbc:ID': line.line_id ?? String(index + 1),
@@ -66,13 +75,17 @@ function buildOrderLine(line: OrderLine, index: number) {
         '#text': line.quantity,
       },
       'cbc:LineExtensionAmount': {
+        '@_currencyID': currency,
         '#text': line.quantity * line.unit_price,
       },
       'cac:Item': {
         'cbc:Description': line.description,
       },
       'cac:Price': {
-        'cbc:PriceAmount': line.unit_price,
+        'cbc:PriceAmount': {
+          '@_currencyID': currency,
+          '#text': line.unit_price,
+        },
       },
     },
   };
