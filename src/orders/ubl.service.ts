@@ -69,7 +69,7 @@ function buildParty(party: Party) {
 function buildOrderLine(line: OrderLine, index: number, currency: string) {
   return {
     'cac:LineItem': {
-      'cbc:ID': line.line_id ?? String(index + 1),
+      'cbc:ID': line.line_id,
       'cbc:Quantity': {
         '@_unitCode': line.unit_code ?? 'EA',
         '#text': line.quantity,
