@@ -23,7 +23,7 @@ export function generateUBL(input: OrderInput): UBLResult {
       'cbc:Note': input.order_note ?? '',
       'cac:BuyerCustomerParty': buildParty(input.buyer),
       'cac:SellerSupplierParty': buildParty(input.seller),
-      'cac:OrderLine': input.lines.map((line, index) => buildOrderLine(line, index)),
+      'cac:OrderLine': input.order_lines.map((line, index) => buildOrderLine(line, index)),
       'cbc:TaxInclusiveAmount': {
         '@_currencyID': input.currency,
         '#text': input.totalAmount,

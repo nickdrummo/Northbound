@@ -22,7 +22,7 @@ export interface OrderInput {
   currency: string;
   issue_date: string;       // ISO date string e.g. "2024-03-01"
   order_note?: string;
-  lines: OrderLine[];
+  order_lines: OrderLine[];
   totalAmount: number;
 }
 

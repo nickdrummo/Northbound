@@ -7,7 +7,7 @@ const validBody = {
   currency: 'AUD',
   issue_date: '2024-03-01',
   totalAmount: 100,
-  lines: [{ description: 'Widget', quantity: 1, unit_price: 100 }],
+  order_lines: [{ description: 'Widget', quantity: 1, unit_price: 100 }],
 };
 
 describe('POST /v1/orders/generate', () => {
@@ -26,7 +26,7 @@ describe('POST /v1/orders/generate', () => {
   });
 
   it('returns 400 when lines is empty', async () => {
-    const res = await request(app).post('/v1/orders/generate').send({ ...validBody, lines: [] });
+    const res = await request(app).post('/v1/orders/generate').send({ ...validBody, order_lines: [] });
     expect(res.status).toBe(400);
   });
 

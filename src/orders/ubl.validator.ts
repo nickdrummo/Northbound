@@ -24,13 +24,13 @@ export function validateOrderInput(body: any): ValidationResult {
   if (!body.issue_date) errors.push('issue_date is required');
   if (typeof body.totalAmount !== 'number') errors.push('totalAmount must be a number');
 
-  if (!Array.isArray(body.lines) || body.lines.length === 0) {
-    errors.push('lines must be a non-empty array');
+  if (!Array.isArray(body.order_lines) || body.order_lines.length === 0) {
+    errors.push('order_lines must be a non-empty array');
   } else {
-    body.lines.forEach((line: any, i: number) => {
-      if (!line.description) errors.push(`lines[${i}].description is required`);
-      if (typeof line.quantity !== 'number') errors.push(`lines[${i}].quantity must be a number`);
-      if (typeof line.unit_price !== 'number') errors.push(`lines[${i}].unit_price must be a number`);
+    body.order_lines.forEach((line: any, i: number) => {
+      if (!line.description) errors.push(`order_lines[${i}].description is required`);
+      if (typeof line.quantity !== 'number') errors.push(`order_lines[${i}].quantity must be a number`);
+      if (typeof line.unit_price !== 'number') errors.push(`order_lines[${i}].unit_price must be a number`);
     });
   }
 

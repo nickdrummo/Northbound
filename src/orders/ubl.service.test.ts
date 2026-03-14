@@ -6,7 +6,7 @@ const validInput = {
   currency: 'AUD',
   issue_date: '2024-03-01',
   totalAmount: 200,
-  lines: [
+  order_lines: [
     { line_id: '1', description: 'Widget A', quantity: 2, unit_price: 50, unit_code: 'EA' },
     { line_id: '2', description: 'Widget B', quantity: 1, unit_price: 100, unit_code: 'EA' },
   ],
@@ -37,7 +37,7 @@ describe('generateUBL', () => {
   it('includes correct number of order lines', () => {
     const { ubl_xml } = generateUBL(validInput);
     const matches = ubl_xml.match(/cac:LineItem/g);
-    expect(matches?.length).toBe(validInput.lines.length * 2); // opening + closing tags
+    expect(matches?.length).toBe(validInput.order_lines.length * 2); // opening + closing tags
   });
 
   it('calculates line extension amount correctly', () => {
