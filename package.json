@@ -42,5 +42,7 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node"
-  }
+  },
+  "build": "tsc",
+  "start": "node dist/server.js"
 }
