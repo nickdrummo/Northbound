@@ -44,3 +44,17 @@ export async function retrieveOrderByID(orderID: string) {
     if (error) return null;
     return data;
 }
+
+export async function listOrders() {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('orders')
+        .select('*');
+
+    if (error) {
+        throw new Error(`Failed to list orders: ${error.message}`);
+    }
+
+    return data;
+}
