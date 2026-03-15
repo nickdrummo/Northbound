@@ -4,7 +4,9 @@
   "description": "SENG2021",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "build": "tsc",
+    "start": "node dist/server.js"
   },
   "repository": {
     "type": "git",
@@ -42,7 +44,5 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node"
-  },
-  "build": "tsc",
-  "start": "node dist/server.js"
+  }
 }
