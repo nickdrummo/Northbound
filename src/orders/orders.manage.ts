@@ -1,8 +1,9 @@
 import { OrderInput } from "./order.types"; 
-import { createClient } from '@supabase/supabase-js'
-import dotenv from 'dotenv'
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
 dotenv.config();
+
 // Connect to the Supabase database using the URL and key
 function getSupabase() {
     return createClient(
@@ -11,11 +12,10 @@ function getSupabase() {
     );
 }
 
-// Stores a new order to the database
-// Taking orderID, orderInput(additional info on the order), and generated XML
-export async function storeOrder(orderID: string, orderInput: OrderInput, ublXml: string){
-    // create struct of the new Order
+// Saves a new order to the database
+export async function storeOrder(orderID: string, orderInput: OrderInput, ublXml: string): Promise<void> {
     const supabase = getSupabase();
+
     const newOrder = {
         id: orderID,
         buyer_id: orderInput.buyer.external_id,
@@ -25,24 +25,22 @@ export async function storeOrder(orderID: string, orderInput: OrderInput, ublXml
         order_note: orderInput.order_note ?? '',
     };
 
-    // insert newOrder to Supa database
     const { error } = await supabase.from('orders').insert(newOrder);
     if (error) {
-        throw new Error(`Failed to store order: ${error.message}`)
-    };
+        throw new Error(`Failed to store order: ${error.message}`);
+    }
 }
 
+// Retrieves a single order by its ID
 export async function retrieveOrderByID(orderID: string) {
-    // Go to orders table and find the row where the orderID matches
     const supabase = getSupabase();
+
     const { data, error } = await supabase
         .from('orders')
-        .select('*')            // get all columns
+        .select('*')
         .eq('id', orderID)
         .single();
 
-    if (error) {
-        return null
-    };
+    if (error) return null;
     return data;
 }

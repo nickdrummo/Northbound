@@ -35,21 +35,18 @@ beforeEach(() => {
     (createClient as jest.Mock).mockReturnValue({ from: mockFrom });
 });
 
-
+// Tests for storing orders
 describe('storeOrder', () => {
     test('successfully saves a new order', async () => {
         mockInsert.mockResolvedValue({ error: null });
-
         await expect(
             storeOrder(testOrderID, testInput, testXml)
         ).resolves.not.toThrow();
-
         expect(mockFrom).toHaveBeenCalledWith('orders');
     });
 
     test('throws an error if database fails', async () => {
         mockInsert.mockResolvedValue({ error: { message: 'DB error' } });
-
         await expect(
             storeOrder(testOrderID, testInput, testXml)
         ).rejects.toThrow('Failed to store order: DB error');
@@ -57,21 +54,18 @@ describe('storeOrder', () => {
 
 });
 
+// Tests for retrieving orders by ID
 describe('retrieveOrderByID', () => {
     test('returns order data when order exists', async () => {
         mockSingle.mockResolvedValue({ data: { id: testOrderID }, error: null });
-
         const result = await retrieveOrderByID(testOrderID);
-
         expect(result).toEqual({ id: testOrderID });
         expect(mockEq).toHaveBeenCalledWith('id', testOrderID);
     });
 
     test('returns null when order is not found', async () => {
         mockSingle.mockResolvedValue({ data: null, error: { message: 'Not found' } });
-
         const result = await retrieveOrderByID(testOrderID);
-
         expect(result).toBeNull();
     });
 
