@@ -1,6 +1,8 @@
+import { ValidationError } from './validation/validateOrderInput';
 export interface ErrorDetail {
   code: string;
   message: string;
+  validationErrors?: ValidationError[];
 }
 
 export interface StandardResponse<T = unknown> {
