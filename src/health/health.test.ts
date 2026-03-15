@@ -7,22 +7,33 @@ describe('GET /health', () => {
     expect(res.status).toBe(200);
   });
 
-  it('returns correct JSON shape', async () => {
+  it('returns correct response envelope', async () => {
     const res = await request(app).get('/health');
-    expect(res.body).toHaveProperty('status', 'ok');
-    expect(res.body).toHaveProperty('uptime');
-    expect(res.body).toHaveProperty('version');
+
+    expect(res.body).toHaveProperty('success', true);
+    expect(res.body).toHaveProperty('message', 'Service is operational.');
+    expect(res.body).toHaveProperty('data');
+    expect(res.body).toHaveProperty('error', null);
+  });
+
+  it('returns correct health data shape', async () => {
+    const res = await request(app).get('/health');
+
+    expect(res.body.data).toHaveProperty('status', 'UP');
+    expect(res.body.data).toHaveProperty('uptime');
+    expect(res.body.data).toHaveProperty('version');
   });
 
   it('uptime is a non-negative number', async () => {
     const res = await request(app).get('/health');
-    expect(typeof res.body.uptime).toBe('number');
-    expect(res.body.uptime).toBeGreaterThanOrEqual(0);
+
+    expect(typeof res.body.data.uptime).toBe('number');
+    expect(res.body.data.uptime).toBeGreaterThanOrEqual(0);
   });
 
   it('is accessible without authentication', async () => {
     const res = await request(app).get('/health');
-    // No auth header — should still succeed
+
     expect(res.status).not.toBe(401);
     expect(res.status).not.toBe(403);
   });
