@@ -17,7 +17,7 @@ app.use(cors());
 const swaggerDocument = parse(readFileSync(join(__dirname, '../swagger.yaml'), 'utf8'));
 
 app.use(express.json());
-app.use('/', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use('/health', healthRouter);
 app.use(authRouter);
 app.use('/v1/orders', ordersRouter);
