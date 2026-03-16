@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import healthRouter from './health/health.router';
 import authRouter from './auth/routes';
 import ordersRouter from './orders/orders.router';
+import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import { readFileSync } from 'fs';
 import { parse } from 'yaml';
@@ -12,6 +13,7 @@ dotenv.config();
 
 const app = express();
 
+app.use(cors());
 const swaggerDocument = parse(readFileSync(join(__dirname, '../swagger.yaml'), 'utf8'));
 
 app.use(express.json());
