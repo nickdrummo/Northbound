@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { validateOrderInput } from '../validation/validateOrderInput';
 import { generateUBL } from './ubl.service';
 import { ok, fail } from '../errors';
-import { listOrders } from './orders.manage';
+import { listOrders, retrieveOrderXML } from './orders.manage';
 
 const router = Router();
 
@@ -46,6 +46,21 @@ router.get('/', async (req: Request, res: Response) => {
     return res.status(500).json(
       fail('Failed to retrieve orders', {
         code: 'LIST_ORDERS_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
+});
+
+router.get('/:id/xml', async (req: Request, res: Response) => {
+  try {
+    const xml = await retrieveOrderXML(String(req.params.id));
+
+    return res.status(200).type('application/xml').send(xml);
+  } catch (err) {
+    return res.status(404).json(
+      fail('Failed to retrieve order XML', {
+        code: 'RETRIEVE_ORDER_XML_ERROR',
         message: err instanceof Error ? err.message : 'Unknown error',
       })
     );
