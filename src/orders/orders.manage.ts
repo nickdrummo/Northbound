@@ -5,30 +5,93 @@ import { generateUBL } from './ubl.service';
 
 dotenv.config();
 
-// Connect to the Supabase database using the URL and key
+// Connect to the Supabase database using the URL and key, if configured
 function getSupabase() {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+        throw new Error('SUPABASE_URL and SUPABASE_ANON_KEY must be set');
+    }
     return createClient(
-        process.env.SUPABASE_URL!,
-        process.env.SUPABASE_ANON_KEY!
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_ANON_KEY
     );
 }
 
-// Saves a new order to the database
-export async function storeOrder(orderID: string, orderInput: OrderInput, ublXml: string): Promise<void> {
+// Saves a new order to the database. Matches schema: parties.id (uuid), orders.buyer_id/seller_id (uuid FK), order_lines.
+export async function storeOrder(orderID: string, orderInput: OrderInput, _ublXml: string): Promise<void> {
     const supabase = getSupabase();
 
-    const newOrder = {
+    // 1. Upsert buyer party and get parties.id (uuid)
+    const { data: buyerRow, error: buyerErr } = await supabase
+        .from('parties')
+        .upsert(
+            {
+                external_id: orderInput.buyer.external_id,
+                name: orderInput.buyer.name,
+                email: orderInput.buyer.email ?? null,
+                street: orderInput.buyer.street ?? null,
+                city: orderInput.buyer.city ?? null,
+                country: orderInput.buyer.country ?? null,
+                postal_code: orderInput.buyer.postal_code ?? null,
+            },
+            { onConflict: 'external_id' }
+        )
+        .select('id')
+        .single();
+
+    if (buyerErr || !buyerRow) {
+        throw new Error(`Failed to store buyer: ${buyerErr?.message ?? 'unknown'}`);
+    }
+
+    // 2. Upsert seller party and get parties.id (uuid)
+    const { data: sellerRow, error: sellerErr } = await supabase
+        .from('parties')
+        .upsert(
+            {
+                external_id: orderInput.seller.external_id,
+                name: orderInput.seller.name,
+                email: orderInput.seller.email ?? null,
+                street: orderInput.seller.street ?? null,
+                city: orderInput.seller.city ?? null,
+                country: orderInput.seller.country ?? null,
+                postal_code: orderInput.seller.postal_code ?? null,
+            },
+            { onConflict: 'external_id' }
+        )
+        .select('id')
+        .single();
+
+    if (sellerErr || !sellerRow) {
+        throw new Error(`Failed to store seller: ${sellerErr?.message ?? 'unknown'}`);
+    }
+
+    // 3. Insert order with buyer_id/seller_id as party UUIDs (schema: orders.buyer_id, orders.seller_id are uuid FK to parties.id)
+    const { error: orderErr } = await supabase.from('orders').insert({
         id: orderID,
-        buyer_id: orderInput.buyer.external_id,
-        seller_id: orderInput.seller.external_id,
+        buyer_id: buyerRow.id,
+        seller_id: sellerRow.id,
         currency: orderInput.currency,
         issue_date: orderInput.issue_date,
-        order_note: orderInput.order_note ?? '',
-    };
+        order_note: orderInput.order_note ?? null,
+    });
 
-    const { error } = await supabase.from('orders').insert(newOrder);
-    if (error) {
-        throw new Error(`Failed to store order: ${error.message}`);
+    if (orderErr) {
+        throw new Error(`Failed to store order: ${orderErr.message}`);
+    }
+
+    // 4. Insert order lines (schema: order_lines.order_id uuid, line_id, description, quantity, unit_price, unit_code)
+    const lines = orderInput.order_lines.map((line) => ({
+        order_id: orderID,
+        line_id: line.line_id,
+        description: line.description,
+        quantity: line.quantity,
+        unit_price: line.unit_price,
+        unit_code: line.unit_code ?? 'EA',
+    }));
+
+    const { error: linesErr } = await supabase.from('order_lines').insert(lines);
+
+    if (linesErr) {
+        throw new Error(`Failed to store order lines: ${linesErr.message}`);
     }
 }
 

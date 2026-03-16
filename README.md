@@ -15,6 +15,7 @@
 - [Response format](#response-format)
 - [Project structure](#project-structure)
 - [Testing](#testing)
+- [Deployment](#deployment)
 - [Repository & support](#repository--support)
 
 ---
@@ -26,7 +27,7 @@ Northbound provides:
 - **Authentication** — User registration and login (JWT).
 - **Health check** — Service status and uptime.
 - **Orders** — Create orders, list them, and retrieve UBL XML for an order.
-- **API documentation** — Interactive Swagger UI at the root path.
+- **API documentation** — Interactive Swagger UI at `/docs`.
 
 The API uses a **standard JSON response envelope** for success and error responses so integrating clients can handle them consistently.
 
@@ -107,19 +108,57 @@ Copy from `.env.example` if present and fill in the values. Ensure `.env` is lis
 
 ## API overview
 
-Base URL when running locally: **`http://localhost:3000`**.
+Base URL when running locally: **`http://localhost:3000`**. Deployed example: **`https://northbound-w6b3.onrender.com`**.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| **GET** | `/` | **Swagger UI** — Interactive API documentation. |
+| **GET** | `/docs` | **Swagger UI** — Interactive API documentation. |
 | **GET** | `/health` | Health check; returns status, uptime, and version. |
 | **POST** | `/auth/register` | Register a new user. Body: `email`, `password`, `passwordConfirm`. |
 | **POST** | `/auth/login` | Log in. Body: `email`, `password`. Returns `userID` and `token`. |
-| **GET** | `/v1/orders` | List all orders. |
-| **POST** | `/v1/orders/generate` | Create an order and generate UBL XML. Body: order payload (see Swagger or types). |
-| **GET** | `/v1/orders/:id/xml` | Retrieve the UBL Order XML for order `id`. Returns `application/xml`. |
+| **GET** | `/orders` or `/v1/orders` | List all orders. |
+| **POST** | `/orders` or `/v1/orders/generate` | Create an order and generate UBL XML. Body: see [Order request body](#order-request-body) below. |
+| **GET** | `/orders/:id` or `/v1/orders/:id` | Retrieve one order by ID (JSON). |
+| **GET** | `/orders/:id/xml` or `/v1/orders/:id/xml` | Retrieve the UBL Order XML for order `id`. Returns `application/xml`. |
 
-For full request/response schemas and examples, use the **Swagger UI** at `GET /` after starting the server.
+For full request/response schemas and examples, use the **Swagger UI** at **`GET /docs`** after starting the server.
+
+### Order request body
+
+Create-order requests must use this JSON shape (e.g. for `POST /orders` or `POST /v1/orders/generate`):
+
+```json
+{
+  "buyer": {
+    "external_id": "BUYER-001",
+    "name": "Example Buyer Pty Ltd",
+    "email": "buyer@example.com",
+    "street": "123 Market St",
+    "city": "Sydney",
+    "country": "AU",
+    "postal_code": "2000"
+  },
+  "seller": {
+    "external_id": "SELLER-001",
+    "name": "Example Seller Pty Ltd"
+  },
+  "currency": "AUD",
+  "issue_date": "2025-03-10",
+  "order_note": "Optional note",
+  "order_lines": [
+    {
+      "line_id": "1",
+      "description": "Wireless Keyboard",
+      "quantity": 2,
+      "unit_price": 49.99,
+      "unit_code": "EA"
+    }
+  ]
+}
+```
+
+- **Required:** `buyer`, `seller`, `currency`, `issue_date` (YYYY-MM-DD), `order_lines` (non-empty array). Each party needs `external_id` and `name`. Each line needs `line_id`, `description`, `quantity`, `unit_price`.
+- **Optional:** `order_note`; party fields `email`, `street`, `city`, `country`, `postal_code`; line field `unit_code` (defaults to `EA`).
 
 ---
 
@@ -176,7 +215,7 @@ Northbound/
 └── .env                    # Not committed; copy from .env.example
 ```
 
-- **Other teams:** Attach your app to the same base URL (e.g. `http://localhost:3000`). Use `/auth/login` or `/auth/register` to get a token; send it as `Authorization: Bearer <token>` when your API requires auth. Use `/v1/orders` and `/v1/orders/generate` for order operations; see Swagger for payload shapes.
+- **Other teams:** Use the same base URL (e.g. deployed `https://northbound-w6b3.onrender.com` or local `http://localhost:3000`). Use `/auth/login` or `/auth/register` for a token; send `Authorization: Bearer <token>` when required. Use `POST /orders` or `POST /v1/orders/generate` for creating orders; see [Order request body](#order-request-body) or Swagger at `/docs`.
 
 ---
 
@@ -191,6 +230,18 @@ Northbound/
   Uses Jest; test files sit next to source (e.g. `*.test.ts`).
 
 - **Test environment:** Set `NODE_ENV=test` (or the test runner does). Ensure `.env` or test setup provides any required env vars (e.g. `JWT_SECRET`, Supabase) for tests that hit the API or DB.
+
+---
+
+## Deployment
+
+The API can be deployed to any Node-friendly host (e.g. Render, Vercel, Railway). Ensure the following are set in the environment:
+
+- `PORT` (if required by the platform)
+- `JWT_SECRET` (required for auth)
+- `SUPABASE_URL` and `SUPABASE_ANON_KEY` (required for order storage and retrieval)
+
+**Live example:** [https://northbound-w6b3.onrender.com](https://northbound-w6b3.onrender.com) — the root URL redirects to Swagger UI at [/docs](https://northbound-w6b3.onrender.com/docs/); health check at `/health`.
 
 ---
 

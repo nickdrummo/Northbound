@@ -24,34 +24,59 @@ const mockSingle = jest.fn();
 const mockEq = jest.fn(() => ({ single: mockSingle }));
 const mockSelect = jest.fn(() => ({ eq: mockEq }));
 const mockInsert = jest.fn();
+const mockSingleId = jest.fn(); // for parties upsert().select('id').single()
+const mockSelectId = jest.fn(() => ({ single: mockSingleId }));
+const mockUpsert = jest.fn(() => ({ select: mockSelectId }));
 const mockFrom = jest.fn(() => ({
     insert: mockInsert,
     select: mockSelect,
+    upsert: mockUpsert,
 }));
 
 // Reset mocks before each test
 beforeEach(() => {
     jest.clearAllMocks();
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'test-key';
     (createClient as jest.Mock).mockReturnValue({ from: mockFrom });
 });
 
-// Tests for storing orders
+// Tests for storing orders (flow: parties upsert x2, orders insert, order_lines insert)
 describe('storeOrder', () => {
+    test('throws when Supabase env is not set', async () => {
+        const url = process.env.SUPABASE_URL;
+        const key = process.env.SUPABASE_ANON_KEY;
+        delete process.env.SUPABASE_URL;
+        delete process.env.SUPABASE_ANON_KEY;
+        await expect(storeOrder(testOrderID, testInput, testXml))
+            .rejects.toThrow('SUPABASE_URL and SUPABASE_ANON_KEY must be set');
+        process.env.SUPABASE_URL = url;
+        process.env.SUPABASE_ANON_KEY = key;
+    });
+
     test('successfully saves a new order', async () => {
+        mockSingleId
+            .mockResolvedValueOnce({ data: { id: 'buyer-uuid' }, error: null })
+            .mockResolvedValueOnce({ data: { id: 'seller-uuid' }, error: null });
         mockInsert.mockResolvedValue({ error: null });
         await expect(
             storeOrder(testOrderID, testInput, testXml)
         ).resolves.not.toThrow();
+        expect(mockFrom).toHaveBeenCalledWith('parties');
         expect(mockFrom).toHaveBeenCalledWith('orders');
+        expect(mockFrom).toHaveBeenCalledWith('order_lines');
     });
 
     test('throws an error if database fails', async () => {
-        mockInsert.mockResolvedValue({ error: { message: 'DB error' } });
+        mockSingleId
+            .mockResolvedValueOnce({ data: { id: 'buyer-uuid' }, error: null })
+            .mockResolvedValueOnce({ data: { id: 'seller-uuid' }, error: null });
+        mockInsert
+            .mockResolvedValueOnce({ error: { message: 'DB error' } }); // orders insert fails
         await expect(
             storeOrder(testOrderID, testInput, testXml)
         ).rejects.toThrow('Failed to store order: DB error');
     });
-
 });
 
 // Tests for retrieving orders by ID
