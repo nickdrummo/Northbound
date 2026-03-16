@@ -5,11 +5,22 @@ jest.mock('@supabase/supabase-js');
 
 // Sample order data to reuse across tests
 const testInput = {
-    buyer: { external_id: 'buyer-ext-1', name: 'Buyer Co', email: 'buyer@example.com', city: 'Sydney', country: 'AU' },
-    seller: { external_id: 'seller-ext-1', name: 'Seller Co', email: 'seller@example.com', city: 'Melbourne', country: 'AU' },
+    buyer: {
+        external_id: 'buyer-ext-1',
+        name: 'Buyer Co',
+        email: 'buyer@example.com',
+        city: 'Sydney',
+        country: 'AU',
+    },
+    seller: {
+        external_id: 'seller-ext-1',
+        name: 'Seller Co',
+        email: 'seller@example.com',
+        city: 'Melbourne',
+        country: 'AU',
+    },
     currency: 'AUD',
     issue_date: '2024-03-01',
-    totalAmount: 200,
     order_lines: [
         { line_id: '1', description: 'Widget A', quantity: 2, unit_price: 50, unit_code: 'EA' },
         { line_id: '2', description: 'Widget B', quantity: 1, unit_price: 100, unit_code: 'EA' },
@@ -19,10 +30,9 @@ const testInput = {
 const testOrderID = 'test-uuid-1234';
 const testXml = '<Order>...</Order>';
 
-// Fake supabase methods we control
 const mockSingle = jest.fn();
-const mockEq = jest.fn(() => ({ single: mockSingle }));
-const mockSelect = jest.fn(() => ({ eq: mockEq }));
+const mockEq     = jest.fn(() => ({ single: mockSingle }));
+const mockSelect = jest.fn(() => ({ eq: mockEq, single: mockSingle }));
 const mockInsert = jest.fn();
 const mockSingleId = jest.fn(); // for parties upsert().select('id').single()
 const mockSelectId = jest.fn(() => ({ single: mockSingleId }));
@@ -33,7 +43,6 @@ const mockFrom = jest.fn(() => ({
     upsert: mockUpsert,
 }));
 
-// Reset mocks before each test
 beforeEach(() => {
     jest.clearAllMocks();
     process.env.SUPABASE_URL = 'https://example.supabase.co';

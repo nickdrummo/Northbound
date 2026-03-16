@@ -1,7 +1,7 @@
 import { OrderInput, Party, OrderLine } from "./order.types"; 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
 import { generateUBL } from './ubl.service';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -88,10 +88,10 @@ export async function storeOrder(orderID: string, orderInput: OrderInput, _ublXm
         unit_code: line.unit_code ?? 'EA',
     }));
 
-    const { error: linesErr } = await supabase.from('order_lines').insert(lines);
+    const { error: linesError } = await supabase.from('order_lines').insert(lines);
 
-    if (linesErr) {
-        throw new Error(`Failed to store order lines: ${linesErr.message}`);
+    if (linesError) {
+        throw new Error(`Failed to store order lines: ${linesError.message}`);
     }
 }
 
