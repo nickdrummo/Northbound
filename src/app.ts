@@ -17,9 +17,17 @@ app.use(cors());
 const swaggerDocument = parse(readFileSync(join(__dirname, '../swagger.yaml'), 'utf8'));
 
 app.use(express.json());
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// Root: redirect to API docs so the base URL is useful
+app.get('/', (_req, res) => {
+  res.redirect(302, '/docs');
+});
+
 app.use('/health', healthRouter);
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use(authRouter);
+// Swagger and other consumers use /orders; keep /v1/orders for backward compatibility
+app.use('/orders', ordersRouter);
 app.use('/v1/orders', ordersRouter);
 
 export default app;

@@ -240,10 +240,10 @@ definitions:
     properties:
       field:
         type: string
-        example: buyer.partyName
+        example: buyer.external_id
       message:
         type: string
-        example: Buyer name is required.
+        example: buyer.external_id is required
 
   HealthStatus:
     type: object
@@ -310,82 +310,81 @@ definitions:
           data:
             $ref: '#/definitions/AuthToken'
 
-  # --- Orders ---
+  # --- Orders (matches API: external_id, name, order_lines with line_id, unit_price, etc.) ---
   OrderCreateRequest:
     type: object
-    required: [buyer, seller, orderLines, currencyCode]
+    required: [buyer, seller, currency, issue_date, order_lines]
     properties:
       buyer:
         $ref: '#/definitions/Party'
       seller:
         $ref: '#/definitions/Party'
-      orderReference:
-        type: string
-        description: Client-side reference for the order
-        example: PO-2025-0001
-      orderDate:
-        type: string
-        format: date
-        example: 2025-03-10
-      currencyCode:
+      currency:
         type: string
         description: ISO 4217 currency code
         example: AUD
-      orderLines:
+      issue_date:
+        type: string
+        format: date
+        description: Order date (YYYY-MM-DD)
+        example: "2025-03-10"
+      order_note:
+        type: string
+        description: Optional note for the order
+      order_lines:
         type: array
+        minItems: 1
         items:
           $ref: '#/definitions/OrderLine'
-      notes:
-        type: string
 
   Party:
     type: object
-    required: [partyId, partyName, countryCode]
+    required: [external_id, name]
     properties:
-      partyId:
+      external_id:
         type: string
+        description: Unique identifier for the party (e.g. from your system)
         example: BUYER-001
-      partyName:
+      name:
         type: string
         example: Example Buyer Pty Ltd
-      countryCode:
+      email:
+        type: string
+        format: email
+      street:
+        type: string
+      city:
+        type: string
+      country:
         type: string
         description: ISO 3166-1 alpha-2 country code
         example: AU
-      languageCode:
+      postal_code:
         type: string
-        description: Optional language preference (for future internationalisation)
-        example: en
-      address:
-        type: string
-        example: 123 Market Street, Sydney, NSW
 
   OrderLine:
     type: object
-    required: [lineNumber, itemId, description, quantity, unitPrice]
+    required: [line_id, description, quantity, unit_price]
     properties:
-      lineNumber:
-        type: integer
-        example: 1
-      itemId:
+      line_id:
         type: string
-        example: SKU-12345
+        description: Line identifier (e.g. "1", "2")
+        example: "1"
       description:
         type: string
         example: Wireless Keyboard
       quantity:
         type: number
-        format: float
+        minimum: 0
         example: 2
-      unitPrice:
+      unit_price:
         type: number
-        format: float
+        minimum: 0
         example: 49.99
-      lineTotal:
-        type: number
-        format: float
-        description: Optional pre-calculated total; if omitted, server may compute.
-        example: 99.98
+      unit_code:
+        type: string
+        description: Unit of measure (defaults to EA if omitted)
+        example: EA
 
   CreatedOrder:
     type: object
@@ -393,11 +392,9 @@ definitions:
       orderID:
         type: string
         format: uuid
-      ublXml:
+      ubl_xml:
         type: string
-      createdAt:
-        type: string
-        format: date-time
+        description: Generated UBL 2.1 Order XML document
 
   CreatedOrderResponse:
     allOf:

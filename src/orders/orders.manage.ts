@@ -5,20 +5,23 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Connect to the Supabase database using the URL and key
+// Connect to the Supabase database using the URL and key, if configured
 function getSupabase() {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+        throw new Error('SUPABASE_URL and SUPABASE_ANON_KEY must be set');
+    }
     return createClient(
-        process.env.SUPABASE_URL!,
-        process.env.SUPABASE_ANON_KEY!
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_ANON_KEY
     );
 }
 
-// Saves a new order to the database
-export async function storeOrder(orderID: string, orderInput: OrderInput, ublXml: string): Promise<void> {
+// Saves a new order to the database. Matches schema: parties.id (uuid), orders.buyer_id/seller_id (uuid FK), order_lines.
+export async function storeOrder(orderID: string, orderInput: OrderInput, _ublXml: string): Promise<void> {
     const supabase = getSupabase();
 
-     // Insert buyer — upsert so repeated calls don't create duplicate parties
-    const { data: buyerData, error: buyerError } = await supabase
+    // 1. Upsert buyer party and get parties.id (uuid)
+    const { data: buyerRow, error: buyerErr } = await supabase
         .from('parties')
         .upsert(
             {
@@ -35,12 +38,12 @@ export async function storeOrder(orderID: string, orderInput: OrderInput, ublXml
         .select('id')
         .single();
 
-    if (buyerError || !buyerData) {
-        throw new Error(`Failed to store buyer: ${buyerError?.message}`);
+    if (buyerErr || !buyerRow) {
+        throw new Error(`Failed to store buyer: ${buyerErr?.message ?? 'unknown'}`);
     }
 
-    // Insert seller
-    const { data: sellerData, error: sellerError } = await supabase
+    // 2. Upsert seller party and get parties.id (uuid)
+    const { data: sellerRow, error: sellerErr } = await supabase
         .from('parties')
         .upsert(
             {
@@ -57,32 +60,25 @@ export async function storeOrder(orderID: string, orderInput: OrderInput, ublXml
         .select('id')
         .single();
 
-    if (sellerError || !sellerData) {
-        throw new Error(`Failed to store seller: ${sellerError?.message}`);
+    if (sellerErr || !sellerRow) {
+        throw new Error(`Failed to store seller: ${sellerErr?.message ?? 'unknown'}`);
     }
 
-    const totalAmount = orderInput.order_lines.reduce(
-        (sum, line) => sum + line.quantity * line.unit_price,
-        0
-    );
-
-    // Insert order — buyer_id/seller_id are now the integer PKs from parties
-    const { error: orderError } = await supabase.from('orders').insert({
+    // 3. Insert order with buyer_id/seller_id as party UUIDs (schema: orders.buyer_id, orders.seller_id are uuid FK to parties.id)
+    const { error: orderErr } = await supabase.from('orders').insert({
         id: orderID,
-        buyer_id: buyerData.id,
-        seller_id: sellerData.id,
+        buyer_id: buyerRow.id,
+        seller_id: sellerRow.id,
         currency: orderInput.currency,
         issue_date: orderInput.issue_date,
         order_note: orderInput.order_note ?? null,
-        total_amount: totalAmount,
-        ubl_xml: ublXml,
     });
 
-    if (orderError) {
-        throw new Error(`Failed to store order: ${orderError.message}`);
+    if (orderErr) {
+        throw new Error(`Failed to store order: ${orderErr.message}`);
     }
 
-    // Insert order lines
+    // 4. Insert order lines (schema: order_lines.order_id uuid, line_id, description, quantity, unit_price, unit_code)
     const lines = orderInput.order_lines.map((line) => ({
         order_id: orderID,
         line_id: line.line_id,

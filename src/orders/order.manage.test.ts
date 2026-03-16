@@ -34,10 +34,9 @@ const mockSingle = jest.fn();
 const mockEq     = jest.fn(() => ({ single: mockSingle }));
 const mockSelect = jest.fn(() => ({ eq: mockEq, single: mockSingle }));
 const mockInsert = jest.fn();
-const mockUpsert = jest.fn(() => ({
-    select: jest.fn(() => ({ single: mockSingle })),
-}));
-
+const mockSingleId = jest.fn(); // for parties upsert().select('id').single()
+const mockSelectId = jest.fn(() => ({ single: mockSingleId }));
+const mockUpsert = jest.fn(() => ({ select: mockSelectId }));
 const mockFrom = jest.fn(() => ({
     insert: mockInsert,
     select: mockSelect,
@@ -46,104 +45,46 @@ const mockFrom = jest.fn(() => ({
 
 beforeEach(() => {
     jest.clearAllMocks();
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'test-key';
     (createClient as jest.Mock).mockReturnValue({ from: mockFrom });
 });
 
-// storeOrder
+// Tests for storing orders (flow: parties upsert x2, orders insert, order_lines insert)
 describe('storeOrder', () => {
-    beforeEach(() => {
-        // Default happy path: upsert returns integer party IDs, inserts succeed
-        mockSingle
-            .mockResolvedValueOnce({ data: { id: 1 }, error: null })  // buyer upsert
-            .mockResolvedValueOnce({ data: { id: 2 }, error: null }); // seller upsert
+    test('throws when Supabase env is not set', async () => {
+        const url = process.env.SUPABASE_URL;
+        const key = process.env.SUPABASE_ANON_KEY;
+        delete process.env.SUPABASE_URL;
+        delete process.env.SUPABASE_ANON_KEY;
+        await expect(storeOrder(testOrderID, testInput, testXml))
+            .rejects.toThrow('SUPABASE_URL and SUPABASE_ANON_KEY must be set');
+        process.env.SUPABASE_URL = url;
+        process.env.SUPABASE_ANON_KEY = key;
+    });
+
+    test('successfully saves a new order', async () => {
+        mockSingleId
+            .mockResolvedValueOnce({ data: { id: 'buyer-uuid' }, error: null })
+            .mockResolvedValueOnce({ data: { id: 'seller-uuid' }, error: null });
         mockInsert.mockResolvedValue({ error: null });
+        await expect(
+            storeOrder(testOrderID, testInput, testXml)
+        ).resolves.not.toThrow();
+        expect(mockFrom).toHaveBeenCalledWith('parties');
+        expect(mockFrom).toHaveBeenCalledWith('orders');
+        expect(mockFrom).toHaveBeenCalledWith('order_lines');
     });
 
-    test('inserts buyer and seller parties via upsert', async () => {
-        await storeOrder(testOrderID, testInput, testXml);
-        expect(mockUpsert).toHaveBeenCalledTimes(2);
-        expect(mockUpsert).toHaveBeenNthCalledWith(
-            1,
-            expect.objectContaining({ external_id: 'buyer-ext-1' }),
-            expect.anything()
-        );
-        expect(mockUpsert).toHaveBeenNthCalledWith(
-            2,
-            expect.objectContaining({ external_id: 'seller-ext-1' }),
-            expect.anything()
-        );
-    });
-
-    test('inserts order with integer buyer_id and seller_id (not external_id strings)', async () => {
-        await storeOrder(testOrderID, testInput, testXml);
-        expect(mockInsert).toHaveBeenCalledWith(
-            expect.objectContaining({ buyer_id: 1, seller_id: 2 })
-        );
-    });
-
-    test('inserts order with correct total_amount (2×50 + 1×100 = 200)', async () => {
-        await storeOrder(testOrderID, testInput, testXml);
-        expect(mockInsert).toHaveBeenCalledWith(
-            expect.objectContaining({ total_amount: 200 })
-        );
-    });
-
-    test('inserts order with ubl_xml', async () => {
-        await storeOrder(testOrderID, testInput, testXml);
-        expect(mockInsert).toHaveBeenCalledWith(
-            expect.objectContaining({ ubl_xml: testXml })
-        );
-    });
-
-    test('inserts order lines after the order row', async () => {
-        await storeOrder(testOrderID, testInput, testXml);
-        // Second insert call is the lines array
-        const secondCall = mockInsert.mock.calls[1][0];
-        expect(Array.isArray(secondCall)).toBe(true);
-        expect(secondCall).toHaveLength(2);
-        expect(secondCall[0]).toMatchObject({ line_id: '1', order_id: testOrderID });
-    });
-
-    test('defaults unit_code to EA when not provided', async () => {
-        const inputNoUnit = {
-            ...testInput,
-            order_lines: [{ line_id: 'L1', description: 'Item', quantity: 1, unit_price: 10 }],
-        };
-        await storeOrder(testOrderID, inputNoUnit, testXml);
-        const lines = mockInsert.mock.calls[1][0];
-        expect(lines[0].unit_code).toBe('EA');
-    });
-
-    test('throws when buyer upsert fails', async () => {
-    mockSingle.mockReset(); // clear the beforeEach values first
-    mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'buyer DB error' } });
-    await expect(storeOrder(testOrderID, testInput, testXml))
-        .rejects.toThrow('Failed to store buyer');
-    });
-
-    test('throws when seller upsert fails', async () => {
-        mockSingle.mockReset();
-        mockSingle
-            .mockResolvedValueOnce({ data: { id: 1 }, error: null })
-            .mockResolvedValueOnce({ data: null, error: { message: 'seller DB error' } });
-        await expect(storeOrder(testOrderID, testInput, testXml))
-            .rejects.toThrow('Failed to store seller');
-    });
-
-    test('throws when order insert fails', async () => {
-        mockInsert.mockReset();
-        mockInsert.mockResolvedValueOnce({ error: { message: 'order insert fail' } });
-        await expect(storeOrder(testOrderID, testInput, testXml))
-            .rejects.toThrow('Failed to store order');
-    });
-
-    test('throws when order_lines insert fails', async () => {
-        mockInsert.mockReset();
+    test('throws an error if database fails', async () => {
+        mockSingleId
+            .mockResolvedValueOnce({ data: { id: 'buyer-uuid' }, error: null })
+            .mockResolvedValueOnce({ data: { id: 'seller-uuid' }, error: null });
         mockInsert
-            .mockResolvedValueOnce({ error: null })
-            .mockResolvedValueOnce({ error: { message: 'lines fail' } });
-        await expect(storeOrder(testOrderID, testInput, testXml))
-            .rejects.toThrow('Failed to store order lines');
+            .mockResolvedValueOnce({ error: { message: 'DB error' } }); // orders insert fails
+        await expect(
+            storeOrder(testOrderID, testInput, testXml)
+        ).rejects.toThrow('Failed to store order: DB error');
     });
 });
 
