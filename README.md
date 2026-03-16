@@ -1,2 +1,202 @@
 # Northbound
-SENG2021
+
+**Order Creation SaaS API** — A backend service for generating and managing standardized UBL 2.1 Order documents. Part of the SENG2021 project; designed for use by other teams as a shared API for the procurement process between Buyer and Seller parties.
+
+---
+
+## Table of contents
+
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Running the service](#running-the-service)
+- [API overview](#api-overview)
+- [Response format](#response-format)
+- [Project structure](#project-structure)
+- [Testing](#testing)
+- [Repository & support](#repository--support)
+
+---
+
+## Overview
+
+Northbound provides:
+
+- **Authentication** — User registration and login (JWT).
+- **Health check** — Service status and uptime.
+- **Orders** — Create orders, list them, and retrieve UBL XML for an order.
+- **API documentation** — Interactive Swagger UI at the root path.
+
+The API uses a **standard JSON response envelope** for success and error responses so integrating clients can handle them consistently.
+
+---
+
+## Prerequisites
+
+- **Node.js** 18+ (LTS recommended)
+- **npm** 9+
+
+---
+
+## Installation
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/CongeeZee/Northbound.git
+   cd Northbound
+   ```
+
+2. **Install dependencies**
+
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment** — See [Configuration](#configuration).
+
+---
+
+## Configuration
+
+Create a `.env` file in the project root. The following variables are used:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PORT` | No | Server port. Default: `3000`. |
+| `NODE_ENV` | No | Set to `test` when running tests. |
+| `JWT_SECRET` | Yes (for auth) | Secret used to sign and verify JWT tokens. Use a long, random string in production. |
+| `SUPABASE_URL` | Yes (for orders) | Your Supabase project URL. |
+| `SUPABASE_ANON_KEY` | Yes (for orders) | Supabase anonymous (public) key for API access. |
+
+**Example `.env` (do not commit this file):**
+
+```env
+PORT=3000
+JWT_SECRET=your-secret-key-min-32-chars-for-production
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+```
+
+Copy from `.env.example` if present and fill in the values. Ensure `.env` is listed in `.gitignore` (it is by default).
+
+---
+
+## Running the service
+
+- **Development (TypeScript via ts-node, or run built JS):**
+
+  ```bash
+  npm run build
+  npm start
+  ```
+
+  The server listens on `http://localhost:3000` (or the port set in `PORT`).
+
+- **Production:** Run the compiled JavaScript:
+
+  ```bash
+  npm run build
+  npm start
+  ```
+
+  `npm start` runs `node dist/server.js`.
+
+---
+
+## API overview
+
+Base URL when running locally: **`http://localhost:3000`**.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| **GET** | `/` | **Swagger UI** — Interactive API documentation. |
+| **GET** | `/health` | Health check; returns status, uptime, and version. |
+| **POST** | `/auth/register` | Register a new user. Body: `email`, `password`, `passwordConfirm`. |
+| **POST** | `/auth/login` | Log in. Body: `email`, `password`. Returns `userID` and `token`. |
+| **GET** | `/v1/orders` | List all orders. |
+| **POST** | `/v1/orders/generate` | Create an order and generate UBL XML. Body: order payload (see Swagger or types). |
+| **GET** | `/v1/orders/:id/xml` | Retrieve the UBL Order XML for order `id`. Returns `application/xml`. |
+
+For full request/response schemas and examples, use the **Swagger UI** at `GET /` after starting the server.
+
+---
+
+## Response format
+
+All JSON responses (except raw XML from `/v1/orders/:id/xml`) follow this envelope:
+
+**Success:**
+
+```json
+{
+  "success": true,
+  "message": "Human-readable message",
+  "data": { ... },
+  "error": null
+}
+```
+
+**Error:**
+
+```json
+{
+  "success": false,
+  "message": "Short description",
+  "data": null,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Detailed message",
+    "validationErrors": []
+  }
+}
+```
+
+- `validationErrors` is optional and used for validation failures (e.g. field-level errors).
+- Use `success` to decide whether to read `data` or `error`. HTTP status codes still reflect the outcome (4xx client errors, 5xx server errors).
+
+---
+
+## Project structure
+
+```
+Northbound/
+├── src/
+│   ├── app.ts              # Express app: middleware, routes, Swagger
+│   ├── server.ts           # Entry point: starts HTTP server
+│   ├── errors.ts           # Standard response helpers (ok, fail, AppError)
+│   ├── auth/               # Registration, login, JWT
+│   ├── health/             # Health check route
+│   ├── orders/             # Order CRUD, UBL generation, storage
+│   └── validation/         # Order input validation
+├── swagger.yaml            # OpenAPI 2.0 spec for API docs
+├── package.json
+├── tsconfig.json
+└── .env                    # Not committed; copy from .env.example
+```
+
+- **Other teams:** Attach your app to the same base URL (e.g. `http://localhost:3000`). Use `/auth/login` or `/auth/register` to get a token; send it as `Authorization: Bearer <token>` when your API requires auth. Use `/v1/orders` and `/v1/orders/generate` for order operations; see Swagger for payload shapes.
+
+---
+
+## Testing
+
+- **Run all tests**
+
+  ```bash
+  npm test
+  ```
+
+  Uses Jest; test files sit next to source (e.g. `*.test.ts`).
+
+- **Test environment:** Set `NODE_ENV=test` (or the test runner does). Ensure `.env` or test setup provides any required env vars (e.g. `JWT_SECRET`, Supabase) for tests that hit the API or DB.
+
+---
+
+## Repository & support
+
+- **Repository:** [github.com/CongeeZee/Northbound](https://github.com/CongeeZee/Northbound)
+- **Issues:** [GitHub Issues](https://github.com/CongeeZee/Northbound/issues)
+
+For integration questions or bugs, open an issue or contact the Northbound team.
