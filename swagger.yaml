@@ -9,8 +9,8 @@ info:
 schemes:
   - https
 
-host: api.northbound-procure.com
-basePath: /v1
+host: northbound-w6b3.onrender.com
+basePath: /
 
 tags:
   - name: Health
