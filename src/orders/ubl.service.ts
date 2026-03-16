@@ -8,8 +8,8 @@ const builder = new XMLBuilder({
   format: true,
 });
 
-export function generateUBL(input: OrderInput): UBLResult {
-  const orderID = randomUUID();
+export function generateUBL(input: OrderInput, existingOrderID?: string): UBLResult {
+  const orderID = existingOrderID ?? randomUUID();
 
   const totalAmount = input.order_lines.reduce(
     (sum, line) => sum + line.quantity * line.unit_price,
