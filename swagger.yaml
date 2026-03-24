@@ -155,7 +155,43 @@ paths:
           schema:
             $ref: '#/definitions/StandardErrorResponse'
 
-  /orders/{orderID}/xml:
+  /orders/recurring:
+    post:
+      tags: [Orders]
+      summary: Create a recurring order
+      description: Creates a recurring order template that repeats on a defined schedule. The order template is stored and can be retrieved, updated, or deleted.
+      security:
+        - bearerAuth: []
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/RecurringOrderCreateRequest'
+      responses:
+        201:
+          description: Recurring order created successfully
+          schema:
+            allOf:
+              - $ref: '#/definitions/StandardResponse'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/definitions/RecurringOrderObject'
+        400:
+          description: Validation error
+          schema:
+            $ref: '#/definitions/StandardErrorResponse'
+        500:
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/StandardErrorResponse'
+
+/orders/{orderID}/xml:
     get:
       tags: [Orders]
       summary: Retrieve UBL Order XML by ID
@@ -464,3 +500,85 @@ definitions:
         properties:
           data:
             $ref: '#/definitions/OrderObject'
+
+  RecurringOrderCreateRequest:
+    type: object
+    required:
+      - buyer
+      - seller
+      - currency
+      - order_lines
+      - frequency
+      - recur_interval
+      - recur_start_date
+    properties:
+      buyer:
+        $ref: '#/definitions/Party'
+      seller:
+        $ref: '#/definitions/Party'
+      currency:
+        type: string
+        example: AUD
+      order_note:
+        type: string
+        example: Standing weekly order
+      order_lines:
+        type: array
+        items:
+          $ref: '#/definitions/OrderLine'
+      frequency:
+        type: string
+        enum: [DAILY, WEEKLY, MONTHLY]
+        example: WEEKLY
+      recur_interval:
+        type: integer
+        minimum: 1
+        example: 1
+        description: Repeat every N frequency units (e.g. every 2 weeks)
+      recur_start_date:
+        type: string
+        format: date
+        example: '2026-04-01'
+      recur_end_date:
+        type: string
+        format: date
+        example: '2026-12-31'
+        description: Optional end date for the recurrence
+
+  RecurringOrderObject:
+    type: object
+    properties:
+      id:
+        type: string
+        format: uuid
+      buyer_id:
+        type: string
+        format: uuid
+      seller_id:
+        type: string
+        format: uuid
+      currency:
+        type: string
+        example: AUD
+      order_note:
+        type: string
+        nullable: true
+      is_recurring:
+        type: boolean
+        example: true
+      frequency:
+        type: string
+        enum: [DAILY, WEEKLY, MONTHLY]
+      recur_interval:
+        type: integer
+        example: 1
+      recur_start_date:
+        type: string
+        format: date
+      recur_end_date:
+        type: string
+        format: date
+        nullable: true
+      created_at:
+        type: string
+        format: date-time
