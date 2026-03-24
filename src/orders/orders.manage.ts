@@ -1,4 +1,4 @@
-import { OrderInput, Party, OrderLine } from "./order.types"; 
+import { OrderInput, Party, OrderLine, RecurringOrderInput, RecurringOrder } from "./order.types"; 
 import { createClient } from '@supabase/supabase-js';
 import { generateUBL } from './ubl.service';
 import dotenv from 'dotenv';
@@ -202,4 +202,79 @@ export async function retrieveOrderXML(orderID: string): Promise<string> {
 
     const result = generateUBL(rebuiltOrderInput, order.id);
     return result.ubl_xml;
+}
+
+// Upserts a party and returns its internal UUID
+async function upsertParty(supabase: ReturnType<typeof createClient>, party: Party): Promise<string> {
+    const { data, error } = await supabase
+        .from('parties')
+        .upsert(
+            {
+                external_id: party.external_id,
+                name: party.name,
+                email: party.email ?? null,
+                street: party.street ?? null,
+                city: party.city ?? null,
+                country: party.country ?? null,
+                postal_code: party.postal_code ?? null,
+            },
+            { onConflict: 'external_id' }
+        )
+        .select('id')
+        .single();
+
+    if (error || !data) {
+        throw new Error(`Failed to upsert party: ${error?.message ?? 'unknown'}`);
+    }
+    return data.id;
+}
+
+// Creates a new recurring order template in the database
+export async function createRecurringOrder(input: RecurringOrderInput): Promise<RecurringOrder> {
+    const supabase = getSupabase();
+
+    const buyerId = await upsertParty(supabase, input.buyer);
+    const sellerId = await upsertParty(supabase, input.seller);
+
+    const { v4: uuidv4 } = await import('uuid');
+    const id = uuidv4();
+
+    const { data, error } = await supabase
+        .from('orders')
+        .insert({
+            id,
+            buyer_id: buyerId,
+            seller_id: sellerId,
+            currency: input.currency,
+            issue_date: input.recur_start_date,
+            order_note: input.order_note ?? null,
+            is_recurring: true,
+            frequency: input.frequency,
+            recur_interval: input.recur_interval,
+            recur_start_date: input.recur_start_date,
+            recur_end_date: input.recur_end_date ?? null,
+        })
+        .select()
+        .single();
+
+    if (error || !data) {
+        throw new Error(`Failed to create recurring order: ${error?.message ?? 'unknown'}`);
+    }
+
+    const lines = input.order_lines.map((line) => ({
+        order_id: id,
+        line_id: line.line_id,
+        description: line.description,
+        quantity: line.quantity,
+        unit_price: line.unit_price,
+        unit_code: line.unit_code ?? 'EA',
+    }));
+
+    const { error: linesError } = await supabase.from('order_lines').insert(lines);
+
+    if (linesError) {
+        throw new Error(`Failed to store recurring order lines: ${linesError.message}`);
+    }
+
+    return data as RecurringOrder;
 }
