@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { validateOrderInput } from '../validation/validateOrderInput';
 import { generateUBL } from './ubl.service';
 import { ok, fail } from '../errors';
-import { listOrders, retrieveOrderByID, retrieveOrderXML, storeOrder } from './orders.manage';
+import { listOrders, retrieveOrderByID, retrieveOrderXML, storeOrder, deleteRecurringOrder } from './orders.manage';
 
 const router = Router();
 
@@ -53,6 +53,31 @@ async function handleCreateOrder(req: Request, res: Response): Promise<void> {
 
 router.post('/', handleCreateOrder);
 router.post('/generate', handleCreateOrder);
+
+router.delete('/recurring/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await deleteRecurringOrder(req.params.id);
+
+    if (result === null) {
+      res.status(404).json(
+        fail('Recurring order not found', {
+          code: 'RECURRING_ORDER_NOT_FOUND',
+          message: 'Recurring order with the given ID does not exist.',
+        })
+      );
+      return;
+    }
+
+    res.status(200).json(ok('Recurring order deleted successfully', result));
+  } catch (err) {
+    res.status(500).json(
+      fail('Failed to delete recurring order', {
+        code: 'DELETE_RECURRING_ORDER_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
+});
 
 router.get('/', async (req: Request, res: Response) => {
   try {
