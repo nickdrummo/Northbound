@@ -1,15 +1,21 @@
 import request from 'supertest';
+import { AppError } from '../errors';
 
 // Mock orders.manage so we can force success/error paths without Supabase
 const mockListOrders = jest.fn();
 const mockRetrieveOrderByID = jest.fn();
 const mockRetrieveOrderXML = jest.fn();
 const mockStoreOrder = jest.fn();
+const mockUpdateOrderWithFullPayload = jest.fn();
+const mockCancelOrder = jest.fn();
 jest.mock('./orders.manage', () => ({
   listOrders: (...args: unknown[]) => mockListOrders(...args),
   retrieveOrderByID: (...args: unknown[]) => mockRetrieveOrderByID(...args),
   retrieveOrderXML: (...args: unknown[]) => mockRetrieveOrderXML(...args),
   storeOrder: (...args: unknown[]) => mockStoreOrder(...args),
+  updateOrderWithFullPayload: (...args: unknown[]) =>
+    mockUpdateOrderWithFullPayload(...args),
+  cancelOrder: (...args: unknown[]) => mockCancelOrder(...args),
 }));
 
 import app from '../app';
@@ -114,15 +120,20 @@ describe('GET /v1/orders/:id/xml', () => {
 });
 
 describe('Order lifecycle (501)', () => {
-  it('PUT /v1/orders/:id/change returns 501', async () => {
+  it('PUT /v1/orders/:id/change returns 501 and points to v2', async () => {
     const res = await request(app).put('/v1/orders/oid/change').send({});
     expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('ORDER_CHANGE_NOT_IMPLEMENTED');
+    expect(res.body.error.code).toBe('ORDER_CHANGE_USE_V2');
+  });
+  it('PUT /orders/:id/change returns 501 and points to v2', async () => {
+    const res = await request(app).put('/orders/oid/change').send({});
+    expect(res.status).toBe(501);
+    expect(res.body.error.code).toBe('ORDER_CHANGE_USE_V2');
   });
   it('POST /v1/orders/:id/cancel returns 501', async () => {
     const res = await request(app).post('/v1/orders/oid/cancel').send({});
     expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('ORDER_CANCEL_NOT_IMPLEMENTED');
+    expect(res.body.error.code).toBe('ORDER_CANCEL_USE_V2');
   });
   it('POST /v1/orders/:id/response returns 501', async () => {
     const res = await request(app).post('/v1/orders/oid/response').send({});
@@ -133,6 +144,80 @@ describe('Order lifecycle (501)', () => {
     const res = await request(app).patch('/v1/orders/oid/detail').send({});
     expect(res.status).toBe(501);
     expect(res.body.error.code).toBe('ORDER_DETAIL_NOT_IMPLEMENTED');
+  });
+});
+
+describe('PUT /v2/orders/:id/change', () => {
+  it('returns 500 when Supabase env is not set', async () => {
+    const res = await request(app).put('/v2/orders/u1/change').send(validBody);
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe('UPDATE_ORDER_ERROR');
+  });
+
+  it('returns 400 when body is invalid', async () => {
+    process.env.SUPABASE_URL = 'https://x.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'key';
+    const res = await request(app).put('/v2/orders/u1/change').send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('returns 200 with regenerated UBL when update succeeds', async () => {
+    process.env.SUPABASE_URL = 'https://x.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'key';
+    mockUpdateOrderWithFullPayload.mockResolvedValue({
+      orderID: 'u1',
+      ubl_xml: '<Order/>',
+    });
+    const res = await request(app).put('/v2/orders/u1/change').send(validBody);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toBe('Order updated successfully.');
+    expect(res.body.data).toEqual({ orderID: 'u1', ubl_xml: '<Order/>' });
+  });
+
+  it('returns 404 when order does not exist', async () => {
+    process.env.SUPABASE_URL = 'https://x.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'key';
+    mockUpdateOrderWithFullPayload.mockRejectedValue(
+      new AppError('ORDER_NOT_FOUND', 'Order with the given ID does not exist.', 404)
+    );
+    const res = await request(app).put('/v2/orders/missing/change').send(validBody);
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('ORDER_NOT_FOUND');
+  });
+});
+
+describe('POST /v2/orders/:id/cancel', () => {
+  it('returns 500 when Supabase env is not set', async () => {
+    const res = await request(app).post('/v2/orders/u1/cancel').send({});
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe('CANCEL_ORDER_ERROR');
+  });
+
+  it('returns 404 when order does not exist', async () => {
+    process.env.SUPABASE_URL = 'https://x.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'key';
+
+    mockCancelOrder.mockRejectedValue(
+      new AppError('ORDER_NOT_FOUND', 'Order with the given ID does not exist.', 404)
+    );
+
+    const res = await request(app).post('/v2/orders/missing/cancel').send({});
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('ORDER_NOT_FOUND');
+  });
+
+  it('returns 200 when cancel succeeds', async () => {
+    process.env.SUPABASE_URL = 'https://x.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'key';
+    mockCancelOrder.mockResolvedValue({ orderID: 'u1' });
+
+    const res = await request(app).post('/v2/orders/u1/cancel').send({});
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toBe('Order cancelled successfully.');
+    expect(res.body.data).toEqual({ orderID: 'u1' });
   });
 });
 

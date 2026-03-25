@@ -26,8 +26,8 @@ Northbound provides:
 
 - **Authentication** — User registration and login (JWT).
 - **Health check** — Service status and uptime.
-- **Orders** — Create orders, list them, and retrieve UBL XML for an order.
-- **API documentation** — Interactive Swagger UI at `/docs`.
+- **Orders** — Create orders, list them, retrieve UBL XML, **replace** an existing order (full payload) via **`PUT /v2/orders/:id/change`**, and **cancel** an order via **`POST /v2/orders/:id/cancel`**.
+- **API documentation** — Interactive Swagger UI at `/docs`, backed by **OpenAPI 3** (`openapi.yaml`).
 
 The API uses a **standard JSON response envelope** for success and error responses so integrating clients can handle them consistently.
 
@@ -64,7 +64,7 @@ The API uses a **standard JSON response envelope** for success and error respons
 Create a `.env` file in the project root. The following variables are used:
 
 | Variable | Required | Description |
-|----------|----------|-------------|
+| ---------- | ---------- | ------------- |
 | `PORT` | No | Server port. Default: `3000`. |
 | `NODE_ENV` | No | Set to `test` when running tests. |
 | `JWT_SECRET` | Yes (for auth) | Secret used to sign and verify JWT tokens. Use a long, random string in production. |
@@ -111,7 +111,7 @@ Copy from `.env.example` if present and fill in the values. Ensure `.env` is lis
 Base URL when running locally: **`http://localhost:3000`**. Deployed example: **`https://northbound-w6b3.onrender.com`**.
 
 | Method | Path | Description |
-|--------|------|-------------|
+| -------- | ------ | ------------- |
 | **GET** | `/docs` | **Swagger UI** — Interactive API documentation. |
 | **GET** | `/health` | Health check; returns status, uptime, and version. |
 | **POST** | `/auth/register` | Register a new user. Body: `email`, `password`, `passwordConfirm`. |
@@ -120,12 +120,16 @@ Base URL when running locally: **`http://localhost:3000`**. Deployed example: **
 | **POST** | `/orders` or `/v1/orders/generate` | Create an order and generate UBL XML. Body: see [Order request body](#order-request-body) below. |
 | **GET** | `/orders/:id` or `/v1/orders/:id` | Retrieve one order by ID (JSON). |
 | **GET** | `/orders/:id/xml` or `/v1/orders/:id/xml` | Retrieve the UBL Order XML for order `id`. Returns `application/xml`. |
+| **PUT** | `/v2/orders/:id/change` | **Order change (Sprint 3).** Replace the order with a full new payload (same shape as create); same `id`; returns updated UBL XML. Requires Supabase env vars. |
+| **PUT** | `/orders/:id/change` or `/v1/orders/:id/change` | **Not implemented on v1** — returns **501** with code `ORDER_CHANGE_USE_V2`; use **`PUT /v2/orders/:id/change`** instead. |
+| **POST** | `/v2/orders/:id/cancel` | **Order cancel (Sprint 3).** Deletes the order and its order lines; returns `orderID`. Requires Supabase env vars. |
+| **POST** | `/orders/:id/cancel` or `/v1/orders/:id/cancel` | **Not implemented on v1** — returns **501** with code `ORDER_CANCEL_USE_V2`; use **`POST /v2/orders/:id/cancel`** instead. |
 
-For full request/response schemas and examples, use the **Swagger UI** at **`GET /docs`** after starting the server.
+For full request/response schemas and examples, use **Swagger UI** at **`GET /docs`** after starting the server (spec: OpenAPI 3.0).
 
 ### Order request body
 
-Create-order requests must use this JSON shape (e.g. for `POST /orders` or `POST /v1/orders/generate`):
+Create-order and **change-order** requests use this JSON shape (e.g. `POST /orders`, `POST /v1/orders/generate`, or **`PUT /v2/orders/{id}/change`**):
 
 ```json
 {
@@ -199,23 +203,23 @@ All JSON responses (except raw XML from `/v1/orders/:id/xml`) follow this envelo
 
 ## Project structure
 
-```
+```text
 Northbound/
 ├── src/
-│   ├── app.ts              # Express app: middleware, routes, Swagger
+│   ├── app.ts              # Express app: middleware, routes, /docs
 │   ├── server.ts           # Entry point: starts HTTP server
 │   ├── errors.ts           # Standard response helpers (ok, fail, AppError)
 │   ├── auth/               # Registration, login, JWT
 │   ├── health/             # Health check route
 │   ├── orders/             # Order CRUD, UBL generation, storage
 │   └── validation/         # Order input validation
-├── swagger.yaml            # OpenAPI 2.0 spec for API docs
+├── openapi.yaml            # OpenAPI 3.0 spec for API docs (Swagger UI)
 ├── package.json
 ├── tsconfig.json
 └── .env                    # Not committed; copy from .env.example
 ```
 
-- **Other teams:** Use the same base URL (e.g. deployed `https://northbound-w6b3.onrender.com` or local `http://localhost:3000`). Use `/auth/login` or `/auth/register` for a token; send `Authorization: Bearer <token>` when required. Use `POST /orders` or `POST /v1/orders/generate` for creating orders; see [Order request body](#order-request-body) or Swagger at `/docs`.
+- **Other teams:** Use the same base URL (e.g. deployed `https://northbound-w6b3.onrender.com` or local `http://localhost:3000`). Use `/auth/login` or `/auth/register` for a token; send `Authorization: Bearer <token>` when required. Use `POST /orders` or `POST /v1/orders/generate` to create orders; use **`PUT /v2/orders/{orderID}/change`** to replace an order (full body); use **`POST /v2/orders/{orderID}/cancel`** to cancel an order. See [Order request body](#order-request-body) or Swagger UI at `/docs`.
 
 ---
 
