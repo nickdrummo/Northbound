@@ -203,3 +203,45 @@ export async function retrieveOrderXML(orderID: string): Promise<string> {
     const result = generateUBL(rebuiltOrderInput, order.id);
     return result.ubl_xml;
 }
+/**
+ * Delete an existing recurring order and its associated order lines.
+ * Used by DELETE /orders/recurring/:id
+ * Returns the deleted orderID, or null if not found.
+ */
+export async function deleteRecurringOrder(orderID: string): Promise<{ orderID: string } | null> {
+    const supabase = getSupabase();
+
+    // Verify the order exists and is a recurring order
+    const { data: existing, error: fetchErr } = await supabase
+        .from('orders')
+        .select('id, is_recurring')
+        .eq('id', orderID)
+        .eq('is_recurring', true)
+        .single();
+
+    if (fetchErr || !existing) {
+        return null;
+    }
+
+    // Delete order lines first (FK constraint)
+    const { error: linesErr } = await supabase
+        .from('order_lines')
+        .delete()
+        .eq('order_id', orderID);
+
+    if (linesErr) {
+        throw new Error(`Failed to delete recurring order lines: ${linesErr.message}`);
+    }
+
+    // Delete the recurring order
+    const { error: orderErr } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderID);
+
+    if (orderErr) {
+        throw new Error(`Failed to delete recurring order: ${orderErr.message}`);
+    }
+
+    return { orderID };
+}
