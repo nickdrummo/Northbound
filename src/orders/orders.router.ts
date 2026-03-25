@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { validateOrderInput, validatePartyCountryUpdate } from '../validation/validateOrderInput';
+import { validateRecurringOrderInput } from '../validation/validateRecurringOrderInput';
 import { generateUBL } from './ubl.service';
 import { AppError, ok, fail } from '../errors';
 import {
@@ -7,6 +8,7 @@ import {
   retrieveOrderByID,
   retrieveOrderXML,
   storeOrder,
+  createRecurringOrder,
   cancelOrder,
   updateOrderPartyCountry,
   updateOrderWithFullPayload,
@@ -61,6 +63,35 @@ async function handleCreateOrder(req: Request, res: Response): Promise<void> {
 
 router.post('/', handleCreateOrder);
 router.post('/generate', handleCreateOrder);
+
+router.post('/recurring', async (req: Request, res: Response): Promise<void> => {
+  const validationErrors = validateRecurringOrderInput(req.body);
+
+  if (validationErrors.length > 0) {
+    res.status(400).json(
+      fail('Validation failed', {
+        code: 'VALIDATION_ERROR',
+        message: 'Request body failed validation',
+        validationErrors,
+      })
+    );
+    return;
+  }
+
+  try {
+    const recurringOrder = await createRecurringOrder(req.body);
+    res.status(201).json(
+      ok('Recurring order created successfully', recurringOrder)
+    );
+  } catch (err) {
+    res.status(500).json(
+      fail('Failed to create recurring order', {
+        code: 'CREATE_RECURRING_ORDER_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
+});
 
 router.get('/', async (req: Request, res: Response) => {
   try {
