@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { validateOrderInput } from '../validation/validateOrderInput';
+import { validateOrderInput, validatePartyCountryUpdate } from '../validation/validateOrderInput';
 import { generateUBL } from './ubl.service';
 import { AppError, ok, fail } from '../errors';
 import {
@@ -8,6 +8,7 @@ import {
   retrieveOrderXML,
   storeOrder,
   cancelOrder,
+  updateOrderPartyCountry,
   updateOrderWithFullPayload,
 } from './orders.manage';
 
@@ -252,6 +253,54 @@ router.patch('/:id/detail', async (_req: Request, res: Response) => {
         'Updating stored order metadata is not supported without additional persistence fields.',
     })
   );
+});
+
+router.patch('/:orderID/party-country', async (req: Request, res: Response) => {
+  const validationErrors = validatePartyCountryUpdate(req.body);
+
+  if (validationErrors.length > 0) {
+    res.status(400).json(
+      fail('Validation failed', {
+        code: 'VALIDATION_ERROR',
+        message: 'Request body failed validation',
+        validationErrors,
+      })
+    );
+    return;
+  }
+
+  try {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      return res.status(500).json(
+        fail('Failed to update order party country', {
+          code: 'UPDATE_ORDER_ERROR',
+          message: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set',
+        })
+      );
+    }
+    const { role, country } = req.body;
+    const result = await updateOrderPartyCountry(req.params.orderID as string, role, country);
+
+    if (result === null) {
+      return res.status(404).json(
+        fail('Order not found', {
+          code: 'ORDER_NOT_FOUND',
+          message: 'Order with the given ID does not exist.',
+        })
+      );
+    }
+
+    return res.status(200).json(
+      ok('Order party country updated successfully', result)
+    );
+  } catch (error) {
+    return res.status(500).json(
+      fail('Failed to update order party country', {
+        code: 'UPDATE_ORDER_ERROR',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      })
+    );
+  }
 });
 
 export default router;

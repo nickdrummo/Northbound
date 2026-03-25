@@ -1,3 +1,5 @@
+import countries from 'i18n-iso-countries';
+
 export interface ValidationError {
   field: string;
   message: string;
@@ -191,5 +193,44 @@ export function validateOrderInput(body: unknown): ValidationError[] {
     });
   }
 
+  return errors;
+}
+
+function isValidCountryCode(code: string): boolean {
+  return countries.isValid(code.toUpperCase());
+}
+
+// validation for countryUpdate
+export function validatePartyCountryUpdate(body: unknown): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  if (!isPlainObject(body)) {
+    return [
+      {
+        field: 'body',
+        message: 'Request body must be a JSON object',
+      },
+    ];
+  }
+
+  if (body.role !== 'buyer' && body.role !== 'seller') {
+    errors.push({
+      field: 'role',
+      message: 'role is required and must be either buyer or seller',
+    });
+  }
+
+  if (!isNonEmptyString(body.country)) {
+    errors.push({
+      field: 'country',
+      message: 'country is required',
+    });
+  }
+  else if (!isValidCountryCode(body.country)) {
+    errors.push({
+      field: 'country',
+      message: 'country must be a valid ISO 3166-1 country code',
+    });
+  }
   return errors;
 }
