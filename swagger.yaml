@@ -180,6 +180,48 @@ paths:
           schema:
             $ref: '#/definitions/StandardErrorResponse'
 
+  /orders/{orderID}/party-country:
+    patch:
+      tags: [Orders]
+      summary: Update buyer or seller country for an existing order
+      description: >
+        Updates the country field of the specified party (buyer or seller)
+        for an existing order. Currency remains unchanged.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orderID
+          required: true
+          type: string
+          format: uuid
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/UpdatePartyCountryRequest'
+      responses:
+        200:
+          description: Party country updated successfully
+          schema:
+            $ref: '#/definitions/UpdatePartyCountryResponse'
+        400:
+          description: Missing or invalid fields
+          schema:
+            $ref: '#/definitions/ValidationErrorResponse'
+        401:
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/StandardErrorResponse'
+        404:
+          description: Order not found
+          schema:
+            $ref: '#/definitions/StandardErrorResponse'
+        500:
+          description: Failed to update order party country
+          schema:
+            $ref: '#/definitions/StandardErrorResponse'
+
 definitions:
   # --- Generic envelopes ---
   StandardResponse:
@@ -464,3 +506,59 @@ definitions:
         properties:
           data:
             $ref: '#/definitions/OrderObject'
+            
+  UpdatePartyCountryRequest:
+    type: object
+    required: [role, country]
+    properties:
+      role:
+        type: string
+        enum: [buyer, seller]
+        example: buyer
+      country:
+        type: string
+        description: ISO 3166-1 alpha-2 country code
+        example: AU
+
+  UpdatedOrderPartyCountry:
+    type: object
+    properties:
+      orderID:
+        type: string
+        format: uuid
+      role:
+        type: string
+        enum: [buyer, seller]
+        example: buyer
+      country:
+        type: string
+        example: AU
+      currency:
+        type: string
+        example: AUD
+      issue_date:
+        type: string
+        format: date
+        example: "2025-03-10"
+      order_note:
+        type: string
+        example: Updated buyer country
+      buyer:
+        $ref: '#/definitions/Party'
+      seller:
+        $ref: '#/definitions/Party'
+      order_lines:
+        type: array
+        items:
+          $ref: '#/definitions/OrderLine'
+      ubl_xml:
+        type: string
+        description: Regenerated UBL 2.1 Order XML document
+
+  UpdatePartyCountryResponse:
+    allOf:
+      - $ref: '#/definitions/StandardResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/definitions/UpdatedOrderPartyCountry'

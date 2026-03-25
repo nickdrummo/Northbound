@@ -203,3 +203,108 @@ export async function retrieveOrderXML(orderID: string): Promise<string> {
     const result = generateUBL(rebuiltOrderInput, order.id);
     return result.ubl_xml;
 }
+
+export async function updateOrderPartyCountry(
+  orderID: string,
+  role: 'buyer' | 'seller',
+  country: string
+) {
+  const supabase = getSupabase();
+  const normalisedCountry = country.trim().toUpperCase();
+
+  const { data: order, error: orderError } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('id', orderID)
+    .single();
+
+  if (orderError || !order) {
+    return null;
+  }
+
+  const partyID = role === 'buyer' ? order.buyer_id : order.seller_id;
+
+  const { error: updateError } = await supabase
+    .from('parties')
+    .update({ country: normalisedCountry })
+    .eq('id', partyID);
+
+  if (updateError) {
+    throw new Error(`Failed to update ${role} country: ${updateError.message}`);
+  }
+
+  const { data: buyer, error: buyerError } = await supabase
+    .from('parties')
+    .select('*')
+    .eq('id', order.buyer_id)
+    .single();
+
+  if (buyerError || !buyer) {
+    throw new Error('Buyer not found');
+  }
+
+  const { data: seller, error: sellerError } = await supabase
+    .from('parties')
+    .select('*')
+    .eq('id', order.seller_id)
+    .single();
+
+  if (sellerError || !seller) {
+    throw new Error('Seller not found');
+  }
+
+  const { data: lines, error: linesError } = await supabase
+    .from('order_lines')
+    .select('*')
+    .eq('order_id', orderID);
+
+  if (linesError) {
+    throw new Error(`Failed to retrieve order lines: ${linesError.message}`);
+  }
+
+  const rebuiltOrderInput: OrderInput = {
+    buyer: {
+      external_id: buyer.external_id,
+      name: buyer.name,
+      email: buyer.email,
+      street: buyer.street,
+      city: buyer.city,
+      country: buyer.country,
+      postal_code: buyer.postal_code,
+    },
+    seller: {
+      external_id: seller.external_id,
+      name: seller.name,
+      email: seller.email,
+      street: seller.street,
+      city: seller.city,
+      country: seller.country,
+      postal_code: seller.postal_code,
+    },
+    currency: order.currency,
+    issue_date: order.issue_date,
+    order_note: order.order_note,
+    order_lines: (lines ?? []).map((line: any) => ({
+      line_id: line.line_id,
+      description: line.description,
+      quantity: line.quantity,
+      unit_price: line.unit_price,
+      unit_code: line.unit_code,
+    })),
+  };
+
+  const result = generateUBL(rebuiltOrderInput, order.id);
+
+  return {
+    orderID: order.id,
+    role,
+    country: normalisedCountry,
+    currency: order.currency,
+    issue_date: order.issue_date,
+    order_note: order.order_note,
+    buyer: rebuiltOrderInput.buyer,
+    seller: rebuiltOrderInput.seller,
+    order_lines: rebuiltOrderInput.order_lines,
+    ubl_xml: result.ubl_xml,
+  };
+}
