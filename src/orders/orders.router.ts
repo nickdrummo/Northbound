@@ -1,8 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { validateOrderInput, validatePartyCountryUpdate } from '../validation/validateOrderInput';
 import { generateUBL } from './ubl.service';
-import { ok, fail } from '../errors';
-import { listOrders, retrieveOrderByID, retrieveOrderXML, storeOrder, updateOrderPartyCountry } from './orders.manage';
+import { AppError, ok, fail } from '../errors';
+import {
+  listOrders,
+  retrieveOrderByID,
+  retrieveOrderXML,
+  storeOrder,
+  cancelOrder,
+  updateOrderPartyCountry,
+  updateOrderWithFullPayload,
+} from './orders.manage';
 
 const router = Router();
 
@@ -121,24 +129,110 @@ router.get('/:id/xml', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id/change', async (_req: Request, res: Response) => {
-  return res.status(501).json(
-    fail('Order change is not implemented in this version of the service.', {
-      code: 'ORDER_CHANGE_NOT_IMPLEMENTED',
-      message:
-        'Changing existing orders requires schema changes and is not supported in the current MVP.',
-    })
-  );
+router.put('/:id/change', async (req: Request, res: Response) => {
+  const isV2 = req.baseUrl === '/v2/orders';
+
+  // Backward compatibility: v1 route still exists but is not implemented.
+  if (!isV2) {
+    return res.status(501).json(
+      fail('Order change is not available on this API version.', {
+        code: 'ORDER_CHANGE_USE_V2',
+        message:
+          'Use PUT /v2/orders/{orderID}/change with a full order payload (same shape as create).',
+      })
+    );
+  }
+
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    res.status(500).json(
+      fail('Failed to update order', {
+        code: 'UPDATE_ORDER_ERROR',
+        message: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set',
+      })
+    );
+    return;
+  }
+
+  const validationErrors = validateOrderInput(req.body);
+  if (validationErrors.length > 0) {
+    res.status(400).json(
+      fail('Validation failed', {
+        code: 'VALIDATION_ERROR',
+        message: 'Request body failed validation',
+        validationErrors,
+      })
+    );
+    return;
+  }
+
+  try {
+    const result = await updateOrderWithFullPayload(String(req.params.id), req.body);
+    res.status(200).json(ok('Order updated successfully.', result));
+  } catch (err: unknown) {
+    if (err instanceof AppError) {
+      res.status(err.status).json(
+        fail(err.message, {
+          code: err.code,
+          message: err.message,
+        })
+      );
+      return;
+    }
+
+    res.status(500).json(
+      fail('Failed to update order', {
+        code: 'UPDATE_ORDER_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
 });
 
-router.post('/:id/cancel', async (_req: Request, res: Response) => {
-  return res.status(501).json(
-    fail('Order cancel is not implemented in this version of the service.', {
-      code: 'ORDER_CANCEL_NOT_IMPLEMENTED',
-      message:
-        'Cancelling orders is not persisted in the current MVP and is not yet supported.',
-    })
-  );
+router.post('/:id/cancel', async (req: Request, res: Response): Promise<void> => {
+  const isV2 = req.baseUrl === '/v2/orders';
+
+  // Backward compatibility: v1 route still exists but is not implemented.
+  if (!isV2) {
+    res.status(501).json(
+      fail('Order cancel is not available on this API version.', {
+        code: 'ORDER_CANCEL_USE_V2',
+        message: 'Use POST /v2/orders/{orderID}/cancel.',
+      })
+    );
+    return;
+  }
+
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    res.status(500).json(
+      fail('Failed to cancel order', {
+        code: 'CANCEL_ORDER_ERROR',
+        message: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set',
+      })
+    );
+    return;
+  }
+
+  try {
+    await cancelOrder(String(req.params.id));
+    res.status(200).json(ok('Order cancelled successfully.', { orderID: String(req.params.id) }));
+  } catch (err: unknown) {
+    if (err instanceof AppError) {
+      res.status(err.status).json(
+        fail(err.message, {
+          code: err.code,
+          message: err.message,
+        })
+      );
+      return;
+    }
+
+    res.status(500).json(
+      fail('Failed to cancel order', {
+        code: 'CANCEL_ORDER_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
 });
 
 router.post('/:id/response', async (_req: Request, res: Response) => {

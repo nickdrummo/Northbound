@@ -1,12 +1,19 @@
-import { storeOrder, retrieveOrderByID, updateOrderPartyCountry } from './orders.manage';
+import {
+  storeOrder,
+  retrieveOrderByID,
+  updateOrderPartyCountry,
+  updateOrderWithFullPayload,
+  cancelOrder
+} from './orders.manage';
 import { createClient } from '@supabase/supabase-js';
 import { generateUBL } from './ubl.service';
 
 jest.mock('@supabase/supabase-js');
 jest.mock('./ubl.service', () => ({
-    generateUBL: jest.fn(),
+  generateUBL: jest.fn(),
 }));
 
+const mockedCreateClient = createClient as jest.Mock;
 const mockedGenerateUBL = generateUBL as jest.Mock;
 
 // Sample order data to reuse across tests
@@ -43,10 +50,16 @@ const mockInsert = jest.fn();
 const mockSingleId = jest.fn();
 const mockSelectId = jest.fn(() => ({ single: mockSingleId }));
 const mockUpsert = jest.fn(() => ({ select: mockSelectId }));
+const mockEqUpdate = jest.fn();
+const mockUpdate = jest.fn(() => ({ eq: mockEqUpdate }));
+const mockEqDelete = jest.fn();
+const mockDelete = jest.fn(() => ({ eq: mockEqDelete }));
 const mockFrom = jest.fn(() => ({
     insert: mockInsert,
     select: mockSelect,
     upsert: mockUpsert,
+    update: mockUpdate,
+    delete: mockDelete,
 }));
 
 beforeEach(() => {
@@ -115,6 +128,68 @@ describe('retrieveOrderByID', () => {
         const result = await retrieveOrderByID(testOrderID);
 
         expect(result).toBeNull();
+    });
+});
+
+describe('updateOrderWithFullPayload', () => {
+    it('throws ORDER_NOT_FOUND when order does not exist', async () => {
+        // retrieveOrderByID() uses: supabase.from('orders').select('*').eq(...).single()
+        // It returns null when `error` is truthy.
+        mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
+
+        await expect(
+            updateOrderWithFullPayload(testOrderID, testInput)
+        ).rejects.toMatchObject({ code: 'ORDER_NOT_FOUND', status: 404 });
+    });
+
+    it('updates parties/orders/lines and returns regenerated UBL XML', async () => {
+        mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
+
+        // buyer/seller upserts (each: upsert().select('id').single())
+        mockSingleId
+            .mockResolvedValueOnce({ data: { id: 'buyer-uuid' }, error: null })
+            .mockResolvedValueOnce({ data: { id: 'seller-uuid' }, error: null });
+
+        mockUpdate.mockReturnValue({ eq: mockEqUpdate });
+        mockEqUpdate.mockResolvedValue({ error: null });
+
+        mockDelete.mockReturnValue({ eq: mockEqDelete });
+        mockEqDelete.mockResolvedValue({ error: null });
+
+        mockInsert.mockResolvedValue({ error: null });
+
+        const result = await updateOrderWithFullPayload(testOrderID, testInput);
+        expect(result).toEqual(
+            expect.objectContaining({ orderID: testOrderID, ubl_xml: expect.any(String) })
+        );
+        expect(result.ubl_xml).toContain(testOrderID);
+    });
+});
+
+describe('cancelOrder', () => {
+    it('throws ORDER_NOT_FOUND when order does not exist', async () => {
+        // retrieveOrderByID uses supabase.from('orders').select('*').eq('id', ...).single()
+        mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
+
+        await expect(cancelOrder(testOrderID)).rejects.toMatchObject({
+            code: 'ORDER_NOT_FOUND',
+            status: 404,
+        });
+    });
+
+    it('deletes order_lines then order and returns orderID', async () => {
+        // retrieveOrderByID success
+        mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
+
+        // order_lines delete().eq(...) -> { error }
+        mockEqDelete
+            .mockResolvedValueOnce({ error: null })
+            // orders delete().eq(...) -> { error }
+            .mockResolvedValueOnce({ error: null });
+
+        const result = await cancelOrder(testOrderID);
+        expect(result).toEqual({ orderID: testOrderID });
+        expect(mockEqDelete).toHaveBeenCalledTimes(2);
     });
 });
 
@@ -403,5 +478,129 @@ describe('updateOrderPartyCountry', () => {
         await expect(
             updateOrderPartyCountry(testOrderID, 'buyer', 'CN')
         ).rejects.toThrow('Failed to update buyer country: DB update failed');
+    });
+});
+
+describe('updateOrderWithFullPayload', () => {
+    it('throws ORDER_NOT_FOUND when order does not exist', async () => {
+        // retrieveOrderByID() uses: supabase.from('orders').select('*').eq(...).single()
+        // It returns null when `error` is truthy.
+        mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
+
+        await expect(
+            updateOrderWithFullPayload(testOrderID, testInput)
+        ).rejects.toMatchObject({ code: 'ORDER_NOT_FOUND', status: 404 });
+    });
+
+    it('updates parties/orders/lines and returns regenerated UBL XML', async () => {
+        mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
+
+        // buyer/seller upserts (each: upsert().select('id').single())
+        mockSingleId
+            .mockResolvedValueOnce({ data: { id: 'buyer-uuid' }, error: null })
+            .mockResolvedValueOnce({ data: { id: 'seller-uuid' }, error: null });
+
+        mockUpdate.mockReturnValue({ eq: mockEqUpdate });
+        mockEqUpdate.mockResolvedValue({ error: null });
+
+        mockDelete.mockReturnValue({ eq: mockEqDelete });
+        mockEqDelete.mockResolvedValue({ error: null });
+
+        mockInsert.mockResolvedValue({ error: null });
+
+        const result = await updateOrderWithFullPayload(testOrderID, testInput);
+        expect(result).toEqual(
+            expect.objectContaining({ orderID: testOrderID, ubl_xml: expect.any(String) })
+        );
+        expect(result.ubl_xml).toContain(testOrderID);
+    });
+});
+
+describe('cancelOrder', () => {
+    it('throws ORDER_NOT_FOUND when order does not exist', async () => {
+        // retrieveOrderByID uses supabase.from('orders').select('*').eq('id', ...).single()
+        mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
+
+        await expect(cancelOrder(testOrderID)).rejects.toMatchObject({
+            code: 'ORDER_NOT_FOUND',
+            status: 404,
+        });
+    });
+
+    it('deletes order_lines then order and returns orderID', async () => {
+        // retrieveOrderByID success
+        mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
+
+        // order_lines delete().eq(...) -> { error }
+        mockEqDelete
+            .mockResolvedValueOnce({ error: null })
+            // orders delete().eq(...) -> { error }
+            .mockResolvedValueOnce({ error: null });
+
+        const result = await cancelOrder(testOrderID);
+        expect(result).toEqual({ orderID: testOrderID });
+        expect(mockEqDelete).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('updateOrderWithFullPayload', () => {
+    it('throws ORDER_NOT_FOUND when order does not exist', async () => {
+        // retrieveOrderByID() uses: supabase.from('orders').select('*').eq(...).single()
+        // It returns null when `error` is truthy.
+        mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
+
+        await expect(
+            updateOrderWithFullPayload(testOrderID, testInput)
+        ).rejects.toMatchObject({ code: 'ORDER_NOT_FOUND', status: 404 });
+    });
+
+    it('updates parties/orders/lines and returns regenerated UBL XML', async () => {
+        mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
+
+        // buyer/seller upserts (each: upsert().select('id').single())
+        mockSingleId
+            .mockResolvedValueOnce({ data: { id: 'buyer-uuid' }, error: null })
+            .mockResolvedValueOnce({ data: { id: 'seller-uuid' }, error: null });
+
+        mockUpdate.mockReturnValue({ eq: mockEqUpdate });
+        mockEqUpdate.mockResolvedValue({ error: null });
+
+        mockDelete.mockReturnValue({ eq: mockEqDelete });
+        mockEqDelete.mockResolvedValue({ error: null });
+
+        mockInsert.mockResolvedValue({ error: null });
+
+        const result = await updateOrderWithFullPayload(testOrderID, testInput);
+        expect(result).toEqual(
+            expect.objectContaining({ orderID: testOrderID, ubl_xml: expect.any(String) })
+        );
+        expect(result.ubl_xml).toContain(testOrderID);
+    });
+});
+
+describe('cancelOrder', () => {
+    it('throws ORDER_NOT_FOUND when order does not exist', async () => {
+        // retrieveOrderByID uses supabase.from('orders').select('*').eq('id', ...).single()
+        mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
+
+        await expect(cancelOrder(testOrderID)).rejects.toMatchObject({
+            code: 'ORDER_NOT_FOUND',
+            status: 404,
+        });
+    });
+
+    it('deletes order_lines then order and returns orderID', async () => {
+        // retrieveOrderByID success
+        mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
+
+        // order_lines delete().eq(...) -> { error }
+        mockEqDelete
+            .mockResolvedValueOnce({ error: null })
+            // orders delete().eq(...) -> { error }
+            .mockResolvedValueOnce({ error: null });
+
+        const result = await cancelOrder(testOrderID);
+        expect(result).toEqual({ orderID: testOrderID });
+        expect(mockEqDelete).toHaveBeenCalledTimes(2);
     });
 });
