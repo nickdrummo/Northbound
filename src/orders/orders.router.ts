@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { validateOrderInput } from '../validation/validateOrderInput';
+import { validateRecurringOrderUpdate } from '../validation/validateRecurringOrderUpdate';
 import { generateUBL } from './ubl.service';
-import { ok, fail } from '../errors';
-import { listOrders, retrieveOrderByID, retrieveOrderXML, storeOrder } from './orders.manage';
+import { AppError, ok, fail } from '../errors';
+import { listOrders, retrieveOrderByID, retrieveOrderXML, storeOrder, updateRecurringOrder } from './orders.manage';
 
 const router = Router();
 
@@ -115,6 +116,39 @@ router.get('/:id/xml', async (req: Request, res: Response) => {
     return res.status(404).json(
       fail('Failed to retrieve order XML', {
         code: 'RETRIEVE_ORDER_XML_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
+});
+
+router.patch('/recurring/:id', async (req: Request, res: Response): Promise<void> => {
+  const validationErrors = validateRecurringOrderUpdate(req.body);
+
+  if (validationErrors.length > 0) {
+    res.status(400).json(
+      fail('Validation failed', {
+        code: 'VALIDATION_ERROR',
+        message: 'Request body failed validation',
+        validationErrors,
+      })
+    );
+    return;
+  }
+
+  try {
+    const updated = await updateRecurringOrder(req.params.id, req.body);
+    res.status(200).json(ok('Recurring order updated successfully', updated));
+  } catch (err) {
+    if (err instanceof AppError) {
+      res.status(err.status).json(
+        fail(err.message, { code: err.code, message: err.message })
+      );
+      return;
+    }
+    res.status(500).json(
+      fail('Failed to update recurring order', {
+        code: 'UPDATE_RECURRING_ORDER_ERROR',
         message: err instanceof Error ? err.message : 'Unknown error',
       })
     );
