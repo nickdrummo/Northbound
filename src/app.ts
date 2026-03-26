@@ -14,7 +14,7 @@ dotenv.config();
 const app = express();
 
 app.use(cors());
-const swaggerDocument = parse(readFileSync(join(__dirname, '../swagger.yaml'), 'utf8'));
+const swaggerDocument = parse(readFileSync(join(__dirname, '../openapi.yaml'), 'utf8'));
 
 app.use(express.json());
 
@@ -29,5 +29,6 @@ app.use(authRouter);
 // Swagger and other consumers use /orders; keep /v1/orders for backward compatibility
 app.use('/orders', ordersRouter);
 app.use('/v1/orders', ordersRouter);
+app.use('/v2/orders', ordersRouter);
 
 export default app;

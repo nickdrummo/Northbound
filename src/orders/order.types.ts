@@ -32,6 +32,20 @@ export interface UBLResult {
 
 export type RecurringFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
+
+
+export interface RecurringOrderInput {
+  buyer: Party;
+  seller: Party;
+  currency: string;
+  order_note?: string;
+  order_lines: OrderLine[];
+  frequency: RecurringFrequency;
+  recur_interval: number;
+  recur_start_date: string; // ISO date string YYYY-MM-DD
+  recur_end_date?: string;  // ISO date string YYYY-MM-DD, optional
+}
+
 export interface RecurringOrder {
   id: string;
   buyer_id: string;

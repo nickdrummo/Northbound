@@ -1,6 +1,7 @@
-import { OrderInput, Party, OrderLine } from "./order.types"; 
+import { OrderInput, Party, OrderLine, RecurringOrderInput, RecurringOrder } from "./order.types"; 
 import { createClient } from '@supabase/supabase-js';
 import { generateUBL } from './ubl.service';
+import { AppError } from '../errors';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -109,6 +110,147 @@ export async function retrieveOrderByID(orderID: string) {
     return data;
 }
 
+/**
+ * Replace an existing order with a new full payload (parties, header, lines), regenerate UBL.
+ * Used by PUT /v2/orders/:id/change — keeps the same order id.
+ */
+export async function updateOrderWithFullPayload(
+    orderID: string,
+    orderInput: OrderInput
+): Promise<{ orderID: string; ubl_xml: string }> {
+    const supabase = getSupabase();
+
+    const existing = await retrieveOrderByID(orderID);
+    if (!existing) {
+        throw new AppError(
+            'ORDER_NOT_FOUND',
+            'Order with the given ID does not exist.',
+            404
+        );
+    }
+
+    const { data: buyerRow, error: buyerErr } = await supabase
+        .from('parties')
+        .upsert(
+            {
+                external_id: orderInput.buyer.external_id,
+                name: orderInput.buyer.name,
+                email: orderInput.buyer.email ?? null,
+                street: orderInput.buyer.street ?? null,
+                city: orderInput.buyer.city ?? null,
+                country: orderInput.buyer.country ?? null,
+                postal_code: orderInput.buyer.postal_code ?? null,
+            },
+            { onConflict: 'external_id' }
+        )
+        .select('id')
+        .single();
+
+    if (buyerErr || !buyerRow) {
+        throw new Error(`Failed to update buyer: ${buyerErr?.message ?? 'unknown'}`);
+    }
+
+    const { data: sellerRow, error: sellerErr } = await supabase
+        .from('parties')
+        .upsert(
+            {
+                external_id: orderInput.seller.external_id,
+                name: orderInput.seller.name,
+                email: orderInput.seller.email ?? null,
+                street: orderInput.seller.street ?? null,
+                city: orderInput.seller.city ?? null,
+                country: orderInput.seller.country ?? null,
+                postal_code: orderInput.seller.postal_code ?? null,
+            },
+            { onConflict: 'external_id' }
+        )
+        .select('id')
+        .single();
+
+    if (sellerErr || !sellerRow) {
+        throw new Error(`Failed to update seller: ${sellerErr?.message ?? 'unknown'}`);
+    }
+
+    const { error: orderErr } = await supabase
+        .from('orders')
+        .update({
+            buyer_id: buyerRow.id,
+            seller_id: sellerRow.id,
+            currency: orderInput.currency,
+            issue_date: orderInput.issue_date,
+            order_note: orderInput.order_note ?? null,
+        })
+        .eq('id', orderID);
+
+    if (orderErr) {
+        throw new Error(`Failed to update order: ${orderErr.message}`);
+    }
+
+    const { error: delErr } = await supabase
+        .from('order_lines')
+        .delete()
+        .eq('order_id', orderID);
+
+    if (delErr) {
+        throw new Error(`Failed to clear order lines: ${delErr.message}`);
+    }
+
+    const lines = orderInput.order_lines.map((line) => ({
+        order_id: orderID,
+        line_id: line.line_id,
+        description: line.description,
+        quantity: line.quantity,
+        unit_price: line.unit_price,
+        unit_code: line.unit_code ?? 'EA',
+    }));
+
+    const { error: insErr } = await supabase.from('order_lines').insert(lines);
+
+    if (insErr) {
+        throw new Error(`Failed to insert order lines: ${insErr.message}`);
+    }
+
+    const result = generateUBL(orderInput, orderID);
+    return { orderID: result.orderID, ubl_xml: result.ubl_xml };
+}
+
+/**
+ * Cancel (delete) an existing order.
+ * Used by POST /v2/orders/:id/cancel.
+ */
+export async function cancelOrder(orderID: string): Promise<{ orderID: string }> {
+    const supabase = getSupabase();
+
+    const existing = await retrieveOrderByID(orderID);
+    if (!existing) {
+        throw new AppError(
+            'ORDER_NOT_FOUND',
+            'Order with the given ID does not exist.',
+            404
+        );
+    }
+
+    const { error: delLinesErr } = await supabase
+        .from('order_lines')
+        .delete()
+        .eq('order_id', orderID);
+
+    if (delLinesErr) {
+        throw new Error(`Failed to clear order lines: ${delLinesErr.message}`);
+    }
+
+    const { error: delOrderErr } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderID);
+
+    if (delOrderErr) {
+        throw new Error(`Failed to delete order: ${delOrderErr.message}`);
+    }
+
+    return { orderID };
+}
+
 export async function listOrders() {
     const supabase = getSupabase();
 
@@ -203,55 +345,4 @@ export async function retrieveOrderXML(orderID: string): Promise<string> {
     const result = generateUBL(rebuiltOrderInput, order.id);
     return result.ubl_xml;
 }
-/**
- * Delete an existing recurring order and its associated order lines.
- * Used by DELETE /orders/recurring/:id
- * Returns the deleted orderID, or null if not found.
- */
-export async function deleteRecurringOrder(orderID: string): Promise<{ orderID: string } | null> {
-    const supabase = getSupabase();
-
-    // Verify the order exists and is a recurring order
-    const { data: existing, error: fetchErr } = await supabase
-        .from('orders')
-        .select('id, is_recurring')
-        .eq('id', orderID)
-        .eq('is_recurring', true)
-        .single();
-
-    if (fetchErr || !existing) {
-        return null;
-    }
-
-    // Fetch order lines before deleting so we can restore them if the order delete fails
-    const { data: existingLines } = await supabase
-        .from('order_lines')
-        .select('*')
-        .eq('order_id', orderID);
-
-    // Delete order lines first (FK constraint)
-    const { error: linesErr } = await supabase
-        .from('order_lines')
-        .delete()
-        .eq('order_id', orderID);
-
-    if (linesErr) {
-        throw new Error(`Failed to delete recurring order lines: ${linesErr.message}`);
-    }
-
-    // Delete the recurring order
-    const { error: orderErr } = await supabase
-        .from('orders')
-        .delete()
-        .eq('id', orderID);
-
-    if (orderErr) {
-        // Attempt to restore order lines to avoid orphaned data loss
-        if (existingLines && existingLines.length > 0) {
-            await supabase.from('order_lines').insert(existingLines);
-        }
-        throw new Error(`Failed to delete recurring order: ${orderErr.message}`);
-    }
-
-    return { orderID };
-}
+import { OrderInput, Party, OrderLine, RecurringOrderInput, RecurringOrderUpdate, RecurringOrder } from "./order.types"; 
