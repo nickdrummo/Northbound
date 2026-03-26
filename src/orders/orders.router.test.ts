@@ -117,12 +117,12 @@ describe('Order lifecycle (501)', () => {
   it('PUT /v1/orders/:id/change returns 501', async () => {
     const res = await request(app).put('/v1/orders/oid/change').send({});
     expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('ORDER_CHANGE_NOT_IMPLEMENTED');
+    expect(res.body.error.code).toBe('ORDER_CHANGE_USE_V2');
   });
   it('POST /v1/orders/:id/cancel returns 501', async () => {
     const res = await request(app).post('/v1/orders/oid/cancel').send({});
     expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('ORDER_CANCEL_NOT_IMPLEMENTED');
+    expect(res.body.error.code).toBe('ORDER_CANCEL_USE_V2');
   });
   it('POST /v1/orders/:id/response returns 501', async () => {
     const res = await request(app).post('/v1/orders/oid/response').send({});

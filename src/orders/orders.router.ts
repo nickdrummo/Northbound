@@ -157,20 +157,18 @@ router.patch('/recurring/:id', async (req: Request, res: Response): Promise<void
 
 router.put('/:id/change', async (_req: Request, res: Response) => {
   return res.status(501).json(
-    fail('Order change is not implemented in this version of the service.', {
-      code: 'ORDER_CHANGE_NOT_IMPLEMENTED',
-      message:
-        'Changing existing orders requires schema changes and is not supported in the current MVP.',
+    fail('Order change is not available on this API version.', {
+      code: 'ORDER_CHANGE_USE_V2',
+      message: 'Use PUT /v2/orders/{orderID}/change with a full order payload (same shape as create).',
     })
   );
 });
 
 router.post('/:id/cancel', async (_req: Request, res: Response) => {
   return res.status(501).json(
-    fail('Order cancel is not implemented in this version of the service.', {
-      code: 'ORDER_CANCEL_NOT_IMPLEMENTED',
-      message:
-        'Cancelling orders is not persisted in the current MVP and is not yet supported.',
+    fail('Order cancel is not available on this API version.', {
+      code: 'ORDER_CANCEL_USE_V2',
+      message: 'Use POST /v2/orders/{orderID}/cancel.',
     })
   );
 });

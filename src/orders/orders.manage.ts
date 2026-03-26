@@ -256,6 +256,18 @@ export async function updateRecurringOrder(
         );
     }
 
+    // Validate recur_end_date against the effective start date (from request or existing DB value)
+    if ('recur_end_date' in update && update.recur_end_date != null) {
+        const effectiveStartDate = update.recur_start_date ?? existing.recur_start_date;
+        if (effectiveStartDate && update.recur_end_date <= effectiveStartDate) {
+            throw new AppError(
+                'VALIDATION_ERROR',
+                'recur_end_date must be after recur_start_date',
+                400
+            );
+        }
+    }
+
     // Build the fields to update on the orders table
     const orderFields: Record<string, unknown> = {};
 
@@ -285,6 +297,16 @@ export async function updateRecurringOrder(
 
     // Replace order lines if provided
     if (update.order_lines !== undefined) {
+        // Fetch existing lines first so we can restore them if insert fails
+        const { data: existingLines, error: fetchLinesErr } = await supabase
+            .from('order_lines')
+            .select('*')
+            .eq('order_id', orderID);
+
+        if (fetchLinesErr) {
+            throw new Error(`Failed to fetch existing order lines: ${fetchLinesErr.message}`);
+        }
+
         const { error: delErr } = await supabase
             .from('order_lines')
             .delete()
@@ -306,6 +328,10 @@ export async function updateRecurringOrder(
         const { error: insErr } = await supabase.from('order_lines').insert(lines);
 
         if (insErr) {
+            // Attempt to restore original lines to avoid data loss
+            if (existingLines && existingLines.length > 0) {
+                await supabase.from('order_lines').insert(existingLines);
+            }
             throw new Error(`Failed to insert updated order lines: ${insErr.message}`);
         }
     }
