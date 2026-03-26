@@ -132,6 +132,51 @@ paths:
           schema:
             $ref: '#/definitions/StandardErrorResponse'
 
+  /orders/recurring/{orderID}:
+    patch:
+      tags: [Orders]
+      summary: Update a recurring order
+      description: Partially updates an existing recurring order template. Only provided fields are updated. If order_lines is provided, they replace all existing lines.
+      security:
+        - bearerAuth: []
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: path
+          name: orderID
+          required: true
+          type: string
+          format: uuid
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/RecurringOrderUpdateRequest'
+      responses:
+        200:
+          description: Recurring order updated successfully
+          schema:
+            allOf:
+              - $ref: '#/definitions/StandardResponse'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/definitions/RecurringOrderObject'
+        400:
+          description: Validation error
+          schema:
+            $ref: '#/definitions/StandardErrorResponse'
+        404:
+          description: Recurring order not found
+          schema:
+            $ref: '#/definitions/StandardErrorResponse'
+        500:
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/StandardErrorResponse'
+
   /orders/{orderID}:
     get:
       tags: [Orders]
@@ -501,6 +546,11 @@ definitions:
           data:
             $ref: '#/definitions/OrderObject'
 
+  RecurringOrderUpdateRequest:
+    type: object
+    minProperties: 1
+    description: Partial update for a recurring order. All fields are optional — at least one must be provided.
+
   RecurringOrderCreateRequest:
     type: object
     required:
@@ -521,20 +571,19 @@ definitions:
         example: AUD
       order_note:
         type: string
-        example: Standing weekly order
       order_lines:
         type: array
+        minItems: 1
         items:
           $ref: '#/definitions/OrderLine'
       frequency:
         type: string
         enum: [DAILY, WEEKLY, MONTHLY]
-        example: WEEKLY
+        example: MONTHLY
       recur_interval:
         type: integer
         minimum: 1
-        example: 1
-        description: Repeat every N frequency units (e.g. every 2 weeks)
+        example: 2
       recur_start_date:
         type: string
         format: date
@@ -542,8 +591,8 @@ definitions:
       recur_end_date:
         type: string
         format: date
+        nullable: true
         example: '2026-12-31'
-        description: Optional end date for the recurrence
 
   RecurringOrderObject:
     type: object

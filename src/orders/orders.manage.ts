@@ -1,4 +1,4 @@
-import { OrderInput, Party, OrderLine, RecurringOrderInput, RecurringOrder } from "./order.types"; 
+import { OrderInput, Party, OrderLine, RecurringOrderInput, RecurringOrderUpdate, RecurringOrder } from "./order.types"; 
 import { createClient } from '@supabase/supabase-js';
 import { generateUBL } from './ubl.service';
 import { AppError } from '../errors';
@@ -345,8 +345,7 @@ export async function retrieveOrderXML(orderID: string): Promise<string> {
     const result = generateUBL(rebuiltOrderInput, order.id);
     return result.ubl_xml;
 }
-
-// Upserts a party and returns its internal UUID
+// Upserts a party and returns its internal UUID (shared helper)
 async function upsertParty(supabase: ReturnType<typeof createClient>, party: Party): Promise<string> {
     const { data, error } = await supabase
         .from('parties')
@@ -525,4 +524,125 @@ export async function updateOrderPartyCountry(
     ubl_xml: result.ubl_xml,
   };
 
+}
+
+/**
+ * Update an existing recurring order with a partial payload.
+ * Only provided fields are updated. If order_lines is provided, they are replaced entirely.
+ * Used by PATCH /orders/recurring/:id
+ */
+export async function updateRecurringOrder(
+    orderID: string,
+    update: RecurringOrderUpdate
+): Promise<RecurringOrder> {
+    const supabase = getSupabase();
+
+    // Verify the order exists and is recurring
+    const { data: existing, error: fetchErr } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderID)
+        .eq('is_recurring', true)
+        .single();
+
+    if (fetchErr || !existing) {
+        throw new AppError(
+            'RECURRING_ORDER_NOT_FOUND',
+            'Recurring order with the given ID does not exist.',
+            404
+        );
+    }
+
+    // Validate recur_end_date against the effective start date (from request or existing DB value)
+    if ('recur_end_date' in update && update.recur_end_date != null) {
+        const effectiveStartDate = update.recur_start_date ?? existing.recur_start_date;
+        if (effectiveStartDate && update.recur_end_date <= effectiveStartDate) {
+            throw new AppError(
+                'VALIDATION_ERROR',
+                'recur_end_date must be after recur_start_date',
+                400
+            );
+        }
+    }
+
+    // Build the fields to update on the orders table
+    const orderFields: Record<string, unknown> = {};
+
+    if (update.buyer !== undefined) {
+        orderFields.buyer_id = await upsertParty(supabase, update.buyer);
+    }
+    if (update.seller !== undefined) {
+        orderFields.seller_id = await upsertParty(supabase, update.seller);
+    }
+    if (update.currency !== undefined) orderFields.currency = update.currency;
+    if (update.order_note !== undefined) orderFields.order_note = update.order_note;
+    if (update.frequency !== undefined) orderFields.frequency = update.frequency;
+    if (update.recur_interval !== undefined) orderFields.recur_interval = update.recur_interval;
+    if (update.recur_start_date !== undefined) orderFields.recur_start_date = update.recur_start_date;
+    if ('recur_end_date' in update) orderFields.recur_end_date = update.recur_end_date ?? null;
+
+    if (Object.keys(orderFields).length > 0) {
+        const { error: updateErr } = await supabase
+            .from('orders')
+            .update(orderFields)
+            .eq('id', orderID);
+
+        if (updateErr) {
+            throw new Error(`Failed to update recurring order: ${updateErr.message}`);
+        }
+    }
+
+    // Replace order lines if provided
+    if (update.order_lines !== undefined) {
+        // Fetch existing lines first so we can restore them if insert fails
+        const { data: existingLines, error: fetchLinesErr } = await supabase
+            .from('order_lines')
+            .select('*')
+            .eq('order_id', orderID);
+
+        if (fetchLinesErr) {
+            throw new Error(`Failed to fetch existing order lines: ${fetchLinesErr.message}`);
+        }
+
+        const { error: delErr } = await supabase
+            .from('order_lines')
+            .delete()
+            .eq('order_id', orderID);
+
+        if (delErr) {
+            throw new Error(`Failed to clear order lines: ${delErr.message}`);
+        }
+
+        const lines = update.order_lines.map((line) => ({
+            order_id: orderID,
+            line_id: line.line_id,
+            description: line.description,
+            quantity: line.quantity,
+            unit_price: line.unit_price,
+            unit_code: line.unit_code ?? 'EA',
+        }));
+
+        const { error: insErr } = await supabase.from('order_lines').insert(lines);
+
+        if (insErr) {
+            // Attempt to restore original lines to avoid data loss
+            if (existingLines && existingLines.length > 0) {
+                await supabase.from('order_lines').insert(existingLines);
+            }
+            throw new Error(`Failed to insert updated order lines: ${insErr.message}`);
+        }
+    }
+
+    // Return the updated record
+    const { data: updated, error: refetchErr } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderID)
+        .single();
+
+    if (refetchErr || !updated) {
+        throw new Error('Failed to retrieve updated recurring order');
+    }
+
+    return updated as RecurringOrder;
 }
