@@ -26,14 +26,15 @@
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "fast-xml-parser": "^5.5.5",
+    "i18n-iso-countries": "^7.14.0",
     "jsonwebtoken": "^9.0.3",
     "swagger-ui-express": "^5.0.1",
     "xmlbuilder2": "^4.0.3",
     "yaml": "^2.8.2"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
     "@types/bcrypt": "^5.0.2",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",

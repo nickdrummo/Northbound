@@ -200,7 +200,43 @@ paths:
           schema:
             $ref: '#/definitions/StandardErrorResponse'
 
-  /orders/{orderID}/xml:
+  /orders/recurring:
+    post:
+      tags: [Orders]
+      summary: Create a recurring order
+      description: Creates a recurring order template that repeats on a defined schedule. The order template is stored and can be retrieved, updated, or deleted.
+      security:
+        - bearerAuth: []
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/RecurringOrderCreateRequest'
+      responses:
+        201:
+          description: Recurring order created successfully
+          schema:
+            allOf:
+              - $ref: '#/definitions/StandardResponse'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/definitions/RecurringOrderObject'
+        400:
+          description: Validation error
+          schema:
+            $ref: '#/definitions/StandardErrorResponse'
+        500:
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/StandardErrorResponse'
+
+/orders/{orderID}/xml:
     get:
       tags: [Orders]
       summary: Retrieve UBL Order XML by ID
@@ -514,6 +550,17 @@ definitions:
     type: object
     minProperties: 1
     description: Partial update for a recurring order. All fields are optional — at least one must be provided.
+
+  RecurringOrderCreateRequest:
+    type: object
+    required:
+      - buyer
+      - seller
+      - currency
+      - order_lines
+      - frequency
+      - recur_interval
+      - recur_start_date
     properties:
       buyer:
         $ref: '#/definitions/Party'
