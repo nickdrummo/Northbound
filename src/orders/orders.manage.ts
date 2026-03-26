@@ -223,6 +223,12 @@ export async function deleteRecurringOrder(orderID: string): Promise<{ orderID: 
         return null;
     }
 
+    // Fetch order lines before deleting so we can restore them if the order delete fails
+    const { data: existingLines } = await supabase
+        .from('order_lines')
+        .select('*')
+        .eq('order_id', orderID);
+
     // Delete order lines first (FK constraint)
     const { error: linesErr } = await supabase
         .from('order_lines')
@@ -240,6 +246,10 @@ export async function deleteRecurringOrder(orderID: string): Promise<{ orderID: 
         .eq('id', orderID);
 
     if (orderErr) {
+        // Attempt to restore order lines to avoid orphaned data loss
+        if (existingLines && existingLines.length > 0) {
+            await supabase.from('order_lines').insert(existingLines);
+        }
         throw new Error(`Failed to delete recurring order: ${orderErr.message}`);
     }
 
