@@ -345,6 +345,8 @@ export async function retrieveOrderXML(orderID: string): Promise<string> {
     const result = generateUBL(rebuiltOrderInput, order.id);
     return result.ubl_xml;
 }
+import { OrderInput, Party, OrderLine, RecurringOrderInput, RecurringOrderUpdate, RecurringOrder } from "./order.types"; 
+
 // Upserts a party and returns its internal UUID (shared helper)
 async function upsertParty(supabase: ReturnType<typeof createClient>, party: Party): Promise<string> {
     const { data, error } = await supabase

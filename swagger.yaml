@@ -133,6 +133,12 @@ paths:
             $ref: '#/definitions/StandardErrorResponse'
 
   /orders/recurring/{orderID}:
+    delete:
+      tags: [Orders]
+      summary: Delete a recurring order
+      description: Deletes a recurring order template and its associated order lines. Returns the deleted order ID.
+      security:
+        - bearerAuth: []
     patch:
       tags: [Orders]
       summary: Update a recurring order
@@ -149,25 +155,20 @@ paths:
           required: true
           type: string
           format: uuid
-        - in: body
-          name: body
-          required: true
-          schema:
-            $ref: '#/definitions/RecurringOrderUpdateRequest'
       responses:
         200:
-          description: Recurring order updated successfully
+          description: Recurring order deleted successfully
           schema:
             allOf:
               - $ref: '#/definitions/StandardResponse'
               - type: object
                 properties:
                   data:
-                    $ref: '#/definitions/RecurringOrderObject'
-        400:
-          description: Validation error
-          schema:
-            $ref: '#/definitions/StandardErrorResponse'
+                    type: object
+                    properties:
+                      orderID:
+                        type: string
+                        format: uuid
         404:
           description: Recurring order not found
           schema:
