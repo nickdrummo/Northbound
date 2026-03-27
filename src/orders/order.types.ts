@@ -42,8 +42,20 @@ export interface RecurringOrderInput {
   order_lines: OrderLine[];
   frequency: RecurringFrequency;
   recur_interval: number;
-  recur_start_date: string; // ISO date string YYYY-MM-DD
-  recur_end_date?: string;  // ISO date string YYYY-MM-DD, optional
+  recur_start_date: string; // ISO date YYYY-MM-DD
+  recur_end_date?: string;  // ISO date YYYY-MM-DD, optional
+}
+
+export interface RecurringOrderUpdate {
+  buyer?: Party;
+  seller?: Party;
+  currency?: string;
+  order_note?: string;
+  order_lines?: OrderLine[];
+  frequency?: RecurringFrequency;
+  recur_interval?: number;
+  recur_start_date?: string;
+  recur_end_date?: string | null;
 }
 
 export interface RecurringOrder {

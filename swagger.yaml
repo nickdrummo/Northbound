@@ -139,6 +139,14 @@ paths:
       description: Deletes a recurring order template and its associated order lines. Returns the deleted order ID.
       security:
         - bearerAuth: []
+    patch:
+      tags: [Orders]
+      summary: Update a recurring order
+      description: Partially updates an existing recurring order template. Only provided fields are updated. If order_lines is provided, they replace all existing lines.
+      security:
+        - bearerAuth: []
+      consumes:
+        - application/json
       produces:
         - application/json
       parameters:
@@ -539,6 +547,11 @@ definitions:
           data:
             $ref: '#/definitions/OrderObject'
 
+  RecurringOrderUpdateRequest:
+    type: object
+    minProperties: 1
+    description: Partial update for a recurring order. All fields are optional — at least one must be provided.
+
   RecurringOrderCreateRequest:
     type: object
     required:
@@ -559,20 +572,19 @@ definitions:
         example: AUD
       order_note:
         type: string
-        example: Standing weekly order
       order_lines:
         type: array
+        minItems: 1
         items:
           $ref: '#/definitions/OrderLine'
       frequency:
         type: string
         enum: [DAILY, WEEKLY, MONTHLY]
-        example: WEEKLY
+        example: MONTHLY
       recur_interval:
         type: integer
         minimum: 1
-        example: 1
-        description: Repeat every N frequency units (e.g. every 2 weeks)
+        example: 2
       recur_start_date:
         type: string
         format: date
@@ -580,8 +592,8 @@ definitions:
       recur_end_date:
         type: string
         format: date
+        nullable: true
         example: '2026-12-31'
-        description: Optional end date for the recurrence
 
   RecurringOrderObject:
     type: object
