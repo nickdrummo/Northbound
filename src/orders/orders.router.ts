@@ -68,7 +68,7 @@ router.post('/generate', handleCreateOrder);
 
 router.delete('/recurring/:id', async (req: Request, res: Response): Promise<void> => {
   try {
-    const result = await deleteRecurringOrder(req.params.id);
+    const result = await deleteRecurringOrder(String(req.params.id));
 
     if (result === null) {
       res.status(404).json(
@@ -202,7 +202,7 @@ router.patch('/recurring/:id', async (req: Request, res: Response): Promise<void
   }
 
   try {
-    const updated = await updateRecurringOrder(req.params.id, req.body);
+    const updated = await updateRecurringOrder(String(req.params.id), req.body);
     res.status(200).json(ok('Recurring order updated successfully', updated));
   } catch (err) {
     if (err instanceof AppError) {

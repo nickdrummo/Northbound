@@ -345,10 +345,9 @@ export async function retrieveOrderXML(orderID: string): Promise<string> {
     const result = generateUBL(rebuiltOrderInput, order.id);
     return result.ubl_xml;
 }
-import { OrderInput, Party, OrderLine, RecurringOrderInput, RecurringOrderUpdate, RecurringOrder } from "./order.types"; 
 
 // Upserts a party and returns its internal UUID (shared helper)
-async function upsertParty(supabase: ReturnType<typeof createClient>, party: Party): Promise<string> {
+async function upsertParty(supabase: ReturnType<typeof getSupabase>, party: Party): Promise<string> {
     const { data, error } = await supabase
         .from('parties')
         .upsert(
@@ -379,8 +378,8 @@ export async function createRecurringOrder(input: RecurringOrderInput): Promise<
     const buyerId = await upsertParty(supabase, input.buyer);
     const sellerId = await upsertParty(supabase, input.seller);
 
-    const { v4: uuidv4 } = await import('uuid');
-    const id = uuidv4();
+    const { randomUUID } = await import('crypto');
+    const id = randomUUID();
 
     const { data, error } = await supabase
         .from('orders')
@@ -420,6 +419,41 @@ export async function createRecurringOrder(input: RecurringOrderInput): Promise<
     }
 
     return data as RecurringOrder;
+}
+
+export async function deleteRecurringOrder(orderID: string): Promise<RecurringOrder | null> {
+    const supabase = getSupabase();
+
+    const { data: existing, error: fetchErr } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderID)
+        .eq('is_recurring', true)
+        .single();
+
+    if (fetchErr || !existing) {
+        return null;
+    }
+
+    const { error: delLinesErr } = await supabase
+        .from('order_lines')
+        .delete()
+        .eq('order_id', orderID);
+
+    if (delLinesErr) {
+        throw new Error(`Failed to delete order lines: ${delLinesErr.message}`);
+    }
+
+    const { error: delOrderErr } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderID);
+
+    if (delOrderErr) {
+        throw new Error(`Failed to delete recurring order: ${delOrderErr.message}`);
+    }
+
+    return existing as RecurringOrder;
 }
 
 export async function updateOrderPartyCountry(

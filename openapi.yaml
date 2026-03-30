@@ -96,6 +96,52 @@ paths:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
 
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request Password Reset
+      description: Sends a password reset token to the provided email address. Always returns 200 to prevent user enumeration.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "200":
+          description: Request processed (regardless of whether the email exists)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset Password
+      description: Resets the user's password using a valid one-time token received via email. Tokens expire after 1 hour.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: Invalid or expired token, or password too short
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
   /orders:
     post:
       tags: [Orders]
@@ -541,6 +587,27 @@ components:
           type: string
         passwordConfirm:
           type: string
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    ResetPasswordRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+          description: The reset token received via email
+        newPassword:
+          type: string
+          description: New password (minimum 8 characters)
+          minLength: 8
 
     AuthToken:
       type: object
