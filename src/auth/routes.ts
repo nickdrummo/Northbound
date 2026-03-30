@@ -1,5 +1,5 @@
 import express from 'express';
-import { login, register } from './auth';
+import { login, register, resetPassword } from './auth';
 import { AppError, type ErrorDetail, fail, ok } from '../errors';
 
 const router = express.Router();
@@ -51,6 +51,41 @@ router.post('/auth/register', (req, res) => {
         userID: authToken.userID,
         token: authToken.token,
       })
+    );
+  } catch (err: unknown) {
+    const appErr = err instanceof AppError ? err : null;
+    if (appErr) {
+      const detail: ErrorDetail = {
+        code: appErr.code,
+        message: appErr.message,
+      };
+      return res.status(appErr.status).json(fail(appErr.message, detail));
+    }
+
+    const detail: ErrorDetail = {
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'An unexpected error occurred.',
+    };
+    return res.status(500).json(fail(detail.message, detail));
+  }
+});
+
+router.post('/auth/reset-password', (req, res) => {
+  try {
+    const { email, newPassword, passwordConfirm } = req.body as {
+      email?: string;
+      newPassword?: string;
+      passwordConfirm?: string;
+    };
+
+    resetPassword(
+      email ?? '',
+      newPassword ?? '',
+      passwordConfirm ?? ''
+    );
+
+    return res.status(200).json(
+      ok('Password reset successful.', null)
     );
   } catch (err: unknown) {
     const appErr = err instanceof AppError ? err : null;
