@@ -17,6 +17,26 @@ function Dashboard() {
           <SummaryCard label="Recurring Templates" value="—" />
         </div>
       </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Recent Orders</h2>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Currency</th>
+              <th>Issue Date</th>
+              <th>Type</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colSpan={5} className={styles.loadingCell}>No orders yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
     </div>
   );
 }
