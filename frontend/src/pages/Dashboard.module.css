@@ -1,0 +1,133 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #1e2a45;
+}
+
+.subtitle {
+  font-size: 0.9rem;
+  color: #718096;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sectionTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #2d3748;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summaryGrid {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.875rem;
+}
+
+.table th {
+  background-color: #f7fafc;
+  padding: 10px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #4a5568;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.table td {
+  padding: 12px 16px;
+  color: #2d3748;
+  border-bottom: 1px solid #f0f4f8;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tr:hover td {
+  background-color: #f7fafc;
+}
+
+.status {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.statusCompleted  { background-color: #c6f6d5; color: #276749; }
+.statusPending    { background-color: #fefcbf; color: #744210; }
+.statusProcessing { background-color: #bee3f8; color: #2c5282; }
+.statusCancelled  { background-color: #fed7d7; color: #9b2c2c; }
+
+.actionsRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 9px 20px;
+  border-radius: 6px;
+  border: 1px solid #c3d0e8;
+  background-color: #ffffff;
+  color: #2d3a8c;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.btn:hover {
+  background-color: #ebf0ff;
+  border-color: #4361ee;
+}
+
+.loadingCell {
+  text-align: center;
+  padding: 24px;
+  color: #718096;
+  font-style: italic;
+}
+
+.error {
+  color: #c53030;
+  font-size: 0.875rem;
+  padding: 8px 0;
+}
+
+.mono {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.8rem;
+  color: #4a5568;
+}
