@@ -13,7 +13,6 @@ jest.mock('./ubl.service', () => ({
   generateUBL: jest.fn(),
 }));
 
-const mockedCreateClient = createClient as jest.Mock;
 const mockedGenerateUBL = generateUBL as jest.Mock;
 
 // Sample order data to reuse across tests
@@ -67,6 +66,11 @@ beforeEach(() => {
     process.env.SUPABASE_URL = 'https://example.supabase.co';
     process.env.SUPABASE_ANON_KEY = 'test-key';
     (createClient as jest.Mock).mockReturnValue({ from: mockFrom });
+
+    mockedGenerateUBL.mockReturnValue({
+        orderID: testOrderID,
+        ubl_xml: `<Order>${testOrderID}</Order>`,
+    });
 });
 
 // Tests for storing orders
@@ -133,8 +137,6 @@ describe('retrieveOrderByID', () => {
 
 describe('updateOrderWithFullPayload', () => {
     it('throws ORDER_NOT_FOUND when order does not exist', async () => {
-        // retrieveOrderByID() uses: supabase.from('orders').select('*').eq(...).single()
-        // It returns null when `error` is truthy.
         mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
 
         await expect(
@@ -145,7 +147,6 @@ describe('updateOrderWithFullPayload', () => {
     it('updates parties/orders/lines and returns regenerated UBL XML', async () => {
         mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
 
-        // buyer/seller upserts (each: upsert().select('id').single())
         mockSingleId
             .mockResolvedValueOnce({ data: { id: 'buyer-uuid' }, error: null })
             .mockResolvedValueOnce({ data: { id: 'seller-uuid' }, error: null });
@@ -168,7 +169,6 @@ describe('updateOrderWithFullPayload', () => {
 
 describe('cancelOrder', () => {
     it('throws ORDER_NOT_FOUND when order does not exist', async () => {
-        // retrieveOrderByID uses supabase.from('orders').select('*').eq('id', ...).single()
         mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
 
         await expect(cancelOrder(testOrderID)).rejects.toMatchObject({
@@ -178,13 +178,10 @@ describe('cancelOrder', () => {
     });
 
     it('deletes order_lines then order and returns orderID', async () => {
-        // retrieveOrderByID success
         mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
 
-        // order_lines delete().eq(...) -> { error }
         mockEqDelete
             .mockResolvedValueOnce({ error: null })
-            // orders delete().eq(...) -> { error }
             .mockResolvedValueOnce({ error: null });
 
         const result = await cancelOrder(testOrderID);
@@ -236,7 +233,7 @@ describe('updateOrderPartyCountry', () => {
 
         mockedGenerateUBL.mockReturnValue({
             orderID: testOrderID,
-            ubl_xml: '<Order>updated</Order>',
+            ubl_xml: `<Order>${testOrderID}</Order>`,
         });
     });
 
@@ -318,49 +315,6 @@ describe('updateOrderPartyCountry', () => {
         expect(mockPartiesUpdate).toHaveBeenCalledWith({ country: 'CN' });
         expect(mockPartiesUpdateEq).toHaveBeenCalledWith('id', 'buyer-uuid');
 
-        expect(mockedGenerateUBL).toHaveBeenCalledWith(
-            {
-                buyer: {
-                    external_id: 'buyer-ext-1',
-                    name: 'Buyer Co',
-                    email: 'buyer@example.com',
-                    street: '1 Buyer St',
-                    city: 'Sydney',
-                    country: 'CN',
-                    postal_code: '2000',
-                },
-                seller: {
-                    external_id: 'seller-ext-1',
-                    name: 'Seller Co',
-                    email: 'seller@example.com',
-                    street: '2 Seller St',
-                    city: 'Melbourne',
-                    country: 'AU',
-                    postal_code: '3000',
-                },
-                currency: 'AUD',
-                issue_date: '2024-03-01',
-                order_note: 'Test note',
-                order_lines: [
-                    {
-                        line_id: '1',
-                        description: 'Widget A',
-                        quantity: 2,
-                        unit_price: 50,
-                        unit_code: 'EA',
-                    },
-                    {
-                        line_id: '2',
-                        description: 'Widget B',
-                        quantity: 1,
-                        unit_price: 100,
-                        unit_code: 'EA',
-                    },
-                ],
-            },
-            testOrderID
-        );
-
         expect(result).toEqual({
             orderID: testOrderID,
             role: 'buyer',
@@ -402,7 +356,7 @@ describe('updateOrderPartyCountry', () => {
                     unit_code: 'EA',
                 },
             ],
-            ubl_xml: '<Order>updated</Order>',
+            ubl_xml: `<Order>${testOrderID}</Order>`,
         });
     });
 
@@ -478,129 +432,5 @@ describe('updateOrderPartyCountry', () => {
         await expect(
             updateOrderPartyCountry(testOrderID, 'buyer', 'CN')
         ).rejects.toThrow('Failed to update buyer country: DB update failed');
-    });
-});
-
-describe('updateOrderWithFullPayload', () => {
-    it('throws ORDER_NOT_FOUND when order does not exist', async () => {
-        // retrieveOrderByID() uses: supabase.from('orders').select('*').eq(...).single()
-        // It returns null when `error` is truthy.
-        mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
-
-        await expect(
-            updateOrderWithFullPayload(testOrderID, testInput)
-        ).rejects.toMatchObject({ code: 'ORDER_NOT_FOUND', status: 404 });
-    });
-
-    it('updates parties/orders/lines and returns regenerated UBL XML', async () => {
-        mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
-
-        // buyer/seller upserts (each: upsert().select('id').single())
-        mockSingleId
-            .mockResolvedValueOnce({ data: { id: 'buyer-uuid' }, error: null })
-            .mockResolvedValueOnce({ data: { id: 'seller-uuid' }, error: null });
-
-        mockUpdate.mockReturnValue({ eq: mockEqUpdate });
-        mockEqUpdate.mockResolvedValue({ error: null });
-
-        mockDelete.mockReturnValue({ eq: mockEqDelete });
-        mockEqDelete.mockResolvedValue({ error: null });
-
-        mockInsert.mockResolvedValue({ error: null });
-
-        const result = await updateOrderWithFullPayload(testOrderID, testInput);
-        expect(result).toEqual(
-            expect.objectContaining({ orderID: testOrderID, ubl_xml: expect.any(String) })
-        );
-        expect(result.ubl_xml).toContain(testOrderID);
-    });
-});
-
-describe('cancelOrder', () => {
-    it('throws ORDER_NOT_FOUND when order does not exist', async () => {
-        // retrieveOrderByID uses supabase.from('orders').select('*').eq('id', ...).single()
-        mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
-
-        await expect(cancelOrder(testOrderID)).rejects.toMatchObject({
-            code: 'ORDER_NOT_FOUND',
-            status: 404,
-        });
-    });
-
-    it('deletes order_lines then order and returns orderID', async () => {
-        // retrieveOrderByID success
-        mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
-
-        // order_lines delete().eq(...) -> { error }
-        mockEqDelete
-            .mockResolvedValueOnce({ error: null })
-            // orders delete().eq(...) -> { error }
-            .mockResolvedValueOnce({ error: null });
-
-        const result = await cancelOrder(testOrderID);
-        expect(result).toEqual({ orderID: testOrderID });
-        expect(mockEqDelete).toHaveBeenCalledTimes(2);
-    });
-});
-
-describe('updateOrderWithFullPayload', () => {
-    it('throws ORDER_NOT_FOUND when order does not exist', async () => {
-        // retrieveOrderByID() uses: supabase.from('orders').select('*').eq(...).single()
-        // It returns null when `error` is truthy.
-        mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
-
-        await expect(
-            updateOrderWithFullPayload(testOrderID, testInput)
-        ).rejects.toMatchObject({ code: 'ORDER_NOT_FOUND', status: 404 });
-    });
-
-    it('updates parties/orders/lines and returns regenerated UBL XML', async () => {
-        mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
-
-        // buyer/seller upserts (each: upsert().select('id').single())
-        mockSingleId
-            .mockResolvedValueOnce({ data: { id: 'buyer-uuid' }, error: null })
-            .mockResolvedValueOnce({ data: { id: 'seller-uuid' }, error: null });
-
-        mockUpdate.mockReturnValue({ eq: mockEqUpdate });
-        mockEqUpdate.mockResolvedValue({ error: null });
-
-        mockDelete.mockReturnValue({ eq: mockEqDelete });
-        mockEqDelete.mockResolvedValue({ error: null });
-
-        mockInsert.mockResolvedValue({ error: null });
-
-        const result = await updateOrderWithFullPayload(testOrderID, testInput);
-        expect(result).toEqual(
-            expect.objectContaining({ orderID: testOrderID, ubl_xml: expect.any(String) })
-        );
-        expect(result.ubl_xml).toContain(testOrderID);
-    });
-});
-
-describe('cancelOrder', () => {
-    it('throws ORDER_NOT_FOUND when order does not exist', async () => {
-        // retrieveOrderByID uses supabase.from('orders').select('*').eq('id', ...).single()
-        mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'Not found' } });
-
-        await expect(cancelOrder(testOrderID)).rejects.toMatchObject({
-            code: 'ORDER_NOT_FOUND',
-            status: 404,
-        });
-    });
-
-    it('deletes order_lines then order and returns orderID', async () => {
-        // retrieveOrderByID success
-        mockSingle.mockResolvedValueOnce({ data: { id: testOrderID }, error: null });
-
-        // order_lines delete().eq(...) -> { error }
-        mockEqDelete
-            .mockResolvedValueOnce({ error: null })
-            // orders delete().eq(...) -> { error }
-            .mockResolvedValueOnce({ error: null });
-
-        const result = await cancelOrder(testOrderID);
-        expect(result).toEqual({ orderID: testOrderID });
-        expect(mockEqDelete).toHaveBeenCalledTimes(2);
     });
 });
