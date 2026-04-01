@@ -121,6 +121,15 @@ router.post('/recurring', async (req: Request, res: Response): Promise<void> => 
 });
 
 router.get('/', async (req: Request, res: Response) => {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    return res.status(500).json(
+      fail('Failed to retrieve orders', {
+        code: 'LIST_ORDERS_ERROR',
+        message: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set',
+      })
+    );
+  }
+
   try {
     const orders = await listOrders();
 
