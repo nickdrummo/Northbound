@@ -37,6 +37,15 @@ function Dashboard() {
           </tbody>
         </table>
       </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Quick Actions</h2>
+        <div className={styles.actionsRow}>
+          <button className={styles.btn}>Create Order</button>
+          <button className={styles.btn}>Add Supplier</button>
+          <button className={styles.btn}>New Template</button>
+        </div>
+      </section>
     </div>
   );
 }
