@@ -181,58 +181,6 @@ export function login(email: string, password: string): AuthToken {
 
 }
 
-export function resetPassword(
-  email: string,
-  newPassword: string,
-  passwordConfirm: string
-): void {
-  if (!email || !newPassword || !passwordConfirm) {
-    throw new AppError(
-      'VALIDATION_ERROR',
-      'Email, newPassword and passwordConfirm are required.',
-      400
-    );
-  }
-
-  if (!isValidEmail(email)) {
-    throw new AppError(
-      'VALIDATION_ERROR',
-      'Email format is invalid.',
-      400
-    );
-  }
-
-  if (!isValidPassword(newPassword)) {
-    throw new AppError(
-      'VALIDATION_ERROR',
-      'Password must be at least 8 characters long.',
-      400
-    );
-  }
-
-  if (newPassword !== passwordConfirm) {
-    throw new AppError(
-      'VALIDATION_ERROR',
-      'newPassword and passwordConfirm must match.',
-      400
-    );
-  }
-
-  const user = users.find(
-    (u) => u.email.toLowerCase() === email.toLowerCase()
-  );
-
-  if (!user) {
-    throw new AppError(
-      'USER_NOT_FOUND',
-      'No user exists with this email.',
-      404
-    );
-  }
-
-  user.passwordHash = bcrypt.hashSync(newPassword, 10);
-}
-
 export async function forgotPassword(email: string): Promise<void> {
   const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
   if (!user) return; // silent — prevents user enumeration
