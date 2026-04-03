@@ -45,13 +45,26 @@ export default function CreateOrder() {
     setLines((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // Backend rejects empty-string optional fields — strip them to undefined
+  function cleanParty(p: Party): Party {
+    return {
+      external_id: p.external_id,
+      name: p.name,
+      email: p.email?.trim() || undefined,
+      street: p.street?.trim() || undefined,
+      city: p.city?.trim() || undefined,
+      country: p.country?.trim() || undefined,
+      postal_code: p.postal_code?.trim() || undefined,
+    };
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (lines.length === 0) { setError('Add at least one order line.'); return; }
 
     const input: OrderInput = {
-      buyer,
-      seller,
+      buyer: cleanParty(buyer),
+      seller: cleanParty(seller),
       currency,
       issue_date: issueDate,
       order_note: note || undefined,

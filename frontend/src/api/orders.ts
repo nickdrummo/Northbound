@@ -70,7 +70,8 @@ export async function createOrder(input: OrderInput): Promise<{ orderID: string 
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.data?.message ?? `Failed to create order: ${res.status}`);
+    const detail = err?.error?.validationErrors?.map((e: { field: string; message: string }) => e.message).join(', ');
+    throw new Error(detail ?? err?.error?.message ?? err?.message ?? `Failed to create order: ${res.status}`);
   }
   const json: ApiResponse<{ orderID: string }> = await res.json();
   return json.data;

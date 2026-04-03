@@ -1,8 +1,10 @@
+import { useNavigate } from 'react-router-dom';
 import SummaryCard from '../components/dashboard/SummaryCard';
 import { useOrders } from '../hooks/useOrders';
 import styles from './Dashboard.module.css';
 
 function Dashboard() {
+  const navigate = useNavigate();
   const { orders, loading, error } = useOrders();
 
   const totalOrders = orders.length;
@@ -79,9 +81,8 @@ function Dashboard() {
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Quick Actions</h2>
         <div className={styles.actionsRow}>
-          <button className={styles.btn}>Create Order</button>
-          <button className={styles.btn}>Add Supplier</button>
-          <button className={styles.btn}>New Template</button>
+          <button className={styles.btn} onClick={() => navigate('/orders/new')}>Create Order</button>
+          <button className={styles.btn} onClick={() => navigate('/templates/new')}>New Template</button>
         </div>
       </section>
     </div>
