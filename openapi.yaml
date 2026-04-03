@@ -471,63 +471,63 @@ paths:
                 $ref: "#/components/schemas/StandardErrorResponse"
 
   /v2/orders/{orderID}/party-country:
-  patch:
-    tags: [OrdersV2]
-    summary: Update buyer or seller country for an existing order
-    description: >
-      **Sprint 3 / API v2.** Updates the country field of the specified
-      party (buyer or seller) for an existing order and returns the
-      regenerated UBL XML. Currency remains unchanged.
-    parameters:
-      - name: orderID
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    requestBody:
-      required: true
-      content:
-        application/json:
+    patch:
+      tags: [OrdersV2]
+      summary: Update buyer or seller country for an existing order
+      description: >
+        **Sprint 3 / API v2.** Updates the country field of the specified
+        party (buyer or seller) for an existing order and returns the
+        regenerated UBL XML. Currency remains unchanged.
+      parameters:
+        - name: orderID
+          in: path
+          required: true
           schema:
-            $ref: "#/components/schemas/UpdatePartyCountryRequest"
-          examples:
-            updateBuyerCountry:
-              summary: Update buyer country
-              value:
-                role: buyer
-                country: AU
-    responses:
-      "200":
-        description: Party country updated successfully
+            type: string
+            format: uuid
+      requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdatePartyCountryResponse"
-      "400":
-        description: Missing or invalid fields
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ValidationErrorResponse"
-      "401":
-        description: Unauthorized
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/StandardErrorResponse"
-      "404":
-        description: Order not found
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/StandardErrorResponse"
-      "500":
-        description: Failed to update order party country
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/StandardErrorResponse"
+              $ref: "#/components/schemas/UpdatePartyCountryRequest"
+            examples:
+              updateBuyerCountry:
+                summary: Update buyer country
+                value:
+                  role: buyer
+                  country: AU
+      responses:
+        "200":
+          description: Party country updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdatePartyCountryResponse"
+        "400":
+          description: Missing or invalid fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "404":
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Failed to update order party country
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
 
 components:
   securitySchemes:
