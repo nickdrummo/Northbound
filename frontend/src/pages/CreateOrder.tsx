@@ -11,6 +11,64 @@ const EMPTY_LINE: Omit<OrderLine, 'line_id'> = {
   description: '', quantity: 1, unit_price: 0, unit_code: 'EA',
 };
 
+// Backend rejects empty-string optional fields — strip them to undefined
+function cleanParty(p: Party): Party {
+  return {
+    external_id: p.external_id,
+    name: p.name,
+    email: p.email?.trim() || undefined,
+    street: p.street?.trim() || undefined,
+    city: p.city?.trim() || undefined,
+    country: p.country?.trim() || undefined,
+    postal_code: p.postal_code?.trim() || undefined,
+  };
+}
+
+// Defined OUTSIDE CreateOrder so React never treats it as a new component type on re-render
+interface PartySectionProps {
+  label: string;
+  data: Party;
+  onChange: (field: keyof Party, value: string) => void;
+}
+
+function PartySection({ label, data, onChange }: PartySectionProps) {
+  return (
+    <div className={s.card}>
+      <p className={s.sectionHeading}>{label}</p>
+      <div className={s.formGrid}>
+        <div className={s.formField}>
+          <label className={s.required}>ID (external_id)</label>
+          <input value={data.external_id} required onChange={(e) => onChange('external_id', e.target.value)} />
+        </div>
+        <div className={s.formField}>
+          <label className={s.required}>Name</label>
+          <input value={data.name} required onChange={(e) => onChange('name', e.target.value)} />
+        </div>
+        <div className={s.formField}>
+          <label>Email</label>
+          <input type="email" value={data.email} onChange={(e) => onChange('email', e.target.value)} />
+        </div>
+        <div className={s.formField}>
+          <label>Street</label>
+          <input value={data.street} onChange={(e) => onChange('street', e.target.value)} />
+        </div>
+        <div className={s.formField}>
+          <label>City</label>
+          <input value={data.city} onChange={(e) => onChange('city', e.target.value)} />
+        </div>
+        <div className={s.formField}>
+          <label>Country</label>
+          <input value={data.country} onChange={(e) => onChange('country', e.target.value)} placeholder="e.g. AU" />
+        </div>
+        <div className={s.formField}>
+          <label>Postal Code</label>
+          <input value={data.postal_code} onChange={(e) => onChange('postal_code', e.target.value)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CreateOrder() {
   const navigate = useNavigate();
 
@@ -24,13 +82,12 @@ export default function CreateOrder() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function updateParty(
-    which: 'buyer' | 'seller',
-    field: keyof Party,
-    value: string,
-  ) {
-    const setter = which === 'buyer' ? setBuyer : setSeller;
-    setter((prev) => ({ ...prev, [field]: value }));
+  function updateBuyer(field: keyof Party, value: string) {
+    setBuyer((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function updateSeller(field: keyof Party, value: string) {
+    setSeller((prev) => ({ ...prev, [field]: value }));
   }
 
   function updateLine(index: number, field: keyof typeof EMPTY_LINE, value: string | number) {
@@ -43,19 +100,6 @@ export default function CreateOrder() {
 
   function removeLine(index: number) {
     setLines((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  // Backend rejects empty-string optional fields — strip them to undefined
-  function cleanParty(p: Party): Party {
-    return {
-      external_id: p.external_id,
-      name: p.name,
-      email: p.email?.trim() || undefined,
-      street: p.street?.trim() || undefined,
-      city: p.city?.trim() || undefined,
-      country: p.country?.trim() || undefined,
-      postal_code: p.postal_code?.trim() || undefined,
-    };
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -87,46 +131,6 @@ export default function CreateOrder() {
     }
   }
 
-  function PartySection({ which }: { which: 'buyer' | 'seller' }) {
-    const data = which === 'buyer' ? buyer : seller;
-    const label = which === 'buyer' ? 'Buyer (Your Organisation)' : 'Seller (Supplier)';
-    return (
-      <div className={s.card}>
-        <p className={s.sectionHeading}>{label}</p>
-        <div className={s.formGrid}>
-          <div className={s.formField}>
-            <label className={s.required}>ID (external_id)</label>
-            <input value={data.external_id} required onChange={(e) => updateParty(which, 'external_id', e.target.value)} />
-          </div>
-          <div className={s.formField}>
-            <label className={s.required}>Name</label>
-            <input value={data.name} required onChange={(e) => updateParty(which, 'name', e.target.value)} />
-          </div>
-          <div className={s.formField}>
-            <label>Email</label>
-            <input type="email" value={data.email} onChange={(e) => updateParty(which, 'email', e.target.value)} />
-          </div>
-          <div className={s.formField}>
-            <label>Street</label>
-            <input value={data.street} onChange={(e) => updateParty(which, 'street', e.target.value)} />
-          </div>
-          <div className={s.formField}>
-            <label>City</label>
-            <input value={data.city} onChange={(e) => updateParty(which, 'city', e.target.value)} />
-          </div>
-          <div className={s.formField}>
-            <label>Country</label>
-            <input value={data.country} onChange={(e) => updateParty(which, 'country', e.target.value)} placeholder="e.g. AU" />
-          </div>
-          <div className={s.formField}>
-            <label>Postal Code</label>
-            <input value={data.postal_code} onChange={(e) => updateParty(which, 'postal_code', e.target.value)} />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <form className={s.page} onSubmit={handleSubmit}>
       <div className={s.pageHeader}>
@@ -138,8 +142,8 @@ export default function CreateOrder() {
         </div>
       </div>
 
-      <PartySection which="buyer" />
-      <PartySection which="seller" />
+      <PartySection label="Buyer (Your Organisation)" data={buyer} onChange={updateBuyer} />
+      <PartySection label="Seller (Supplier)" data={seller} onChange={updateSeller} />
 
       {/* Order details */}
       <div className={s.card}>
