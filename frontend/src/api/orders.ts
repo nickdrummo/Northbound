@@ -1,5 +1,32 @@
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
+export interface Party {
+  external_id: string;
+  name: string;
+  email?: string;
+  street?: string;
+  city?: string;
+  country?: string;
+  postal_code?: string;
+}
+
+export interface OrderLine {
+  line_id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  unit_code?: string;
+}
+
+export interface OrderInput {
+  buyer: Party;
+  seller: Party;
+  currency: string;
+  issue_date: string;
+  order_note?: string;
+  order_lines: OrderLine[];
+}
+
 export interface Order {
   id: string;
   buyer_id: string;
@@ -23,9 +50,36 @@ interface ApiResponse<T> {
 
 export async function fetchOrders(): Promise<Order[]> {
   const res = await fetch(`${API_URL}/orders`);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch orders: ${res.status} ${res.statusText}`);
-  }
+  if (!res.ok) throw new Error(`Failed to fetch orders: ${res.status} ${res.statusText}`);
   const json: ApiResponse<Order[]> = await res.json();
   return json.data;
+}
+
+export async function fetchOrder(id: string): Promise<Order> {
+  const res = await fetch(`${API_URL}/orders/${id}`);
+  if (!res.ok) throw new Error(`Failed to fetch order: ${res.status} ${res.statusText}`);
+  const json: ApiResponse<Order> = await res.json();
+  return json.data;
+}
+
+export async function createOrder(input: OrderInput): Promise<{ orderID: string }> {
+  const res = await fetch(`${API_URL}/orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.data?.message ?? `Failed to create order: ${res.status}`);
+  }
+  const json: ApiResponse<{ orderID: string }> = await res.json();
+  return json.data;
+}
+
+export async function cancelOrder(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/v2/orders/${id}/cancel`, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.data?.message ?? `Failed to cancel order: ${res.status}`);
+  }
 }
