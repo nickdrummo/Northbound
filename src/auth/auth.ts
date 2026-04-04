@@ -26,6 +26,8 @@ const users: UserRecord[] = [
 ];
 
 const resetTokens = new Map<string, { userID: number; expiresAt: Date }>();
+// token -> expiresAt timestamp (ms)
+const revokedTokens = new Map<string, number>();
 
 function isValidEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -205,5 +207,44 @@ export async function resetPassword(token: string, newPassword: string): Promise
   }
   user.passwordHash = bcrypt.hashSync(newPassword, 10);
   resetTokens.delete(token); // one-time use
+}
+
+export function logout(token: string): void {
+  if (!token) {
+    throw new AppError(
+      'UNAUTHORIZED',
+      'Authorization token is required.',
+      401
+    );
+  }
+
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new AppError(
+      'SERVER_MISCONFIGURED',
+      'Authentication is temporarily unavailable.',
+      500
+    );
+  }
+
+  try {
+    const payload = jwt.verify(token, secret) as jwt.JwtPayload;
+
+    if (typeof payload.exp !== 'number') {
+      throw new AppError(
+        'UNAUTHORIZED',
+        'Invalid or expired token.',
+        401
+      );
+    }
+
+    revokedTokens.set(token, payload.exp * 1000);
+  } catch {
+    throw new AppError(
+      'UNAUTHORIZED',
+      'Invalid or expired token.',
+      401
+    );
+  }
 }
 

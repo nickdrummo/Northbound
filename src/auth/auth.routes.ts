@@ -1,5 +1,5 @@
 import express from 'express';
-import { login, register, forgotPassword, resetPassword } from './auth';
+import { login, register, forgotPassword, resetPassword, logout} from './auth';
 import { AppError, type ErrorDetail, fail, ok } from '../errors';
 
 const router = express.Router();
@@ -102,5 +102,39 @@ router.post('/auth/reset-password', async (req, res) => {
   }
 });
 
-export default router;
+router.post('/auth/logout', (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
 
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      const detail: ErrorDetail = {
+        code: 'UNAUTHORIZED',
+        message: 'Missing or invalid Authorization header.',
+      };
+      return res.status(401).json(fail(detail.message, detail));
+    }
+
+    const token = authHeader.slice('Bearer '.length);
+    logout(token);
+
+    return res.status(200).json(ok('Logout successful.', null));
+  } catch (err: unknown) {
+    const appErr = err instanceof AppError ? err : null;
+
+    if (appErr) {
+      const detail: ErrorDetail = {
+        code: appErr.code,
+        message: appErr.message,
+      };
+      return res.status(appErr.status).json(fail(appErr.message, detail));
+    }
+
+    const detail: ErrorDetail = {
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'An unexpected error occurred.',
+    };
+    return res.status(500).json(fail(detail.message, detail));
+  }
+});
+
+export default router;
