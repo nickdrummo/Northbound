@@ -71,3 +71,17 @@ export interface RecurringOrder {
   recur_end_date: string | null;
   created_at: string;
 }
+
+/** Partial update for `PATCH /orders/:id/detail` (non-recurring orders only). */
+export interface OrderDetailPatch {
+  currency?: string;
+  issue_date?: string;
+  order_note?: string | null;
+}
+
+/** Body for `POST /orders/:id/response` (UBL OrderResponse). */
+export interface OrderResponseInput {
+  response_code: string;
+  issue_date?: string;
+  note?: string;
+}

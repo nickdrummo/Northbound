@@ -8,6 +8,8 @@ const mockRetrieveOrderXML = jest.fn();
 const mockStoreOrder = jest.fn();
 const mockUpdateOrderWithFullPayload = jest.fn();
 const mockCancelOrder = jest.fn();
+const mockPatchOrderDetail = jest.fn();
+const mockGenerateOrderResponseForOrder = jest.fn();
 
 jest.mock('./orders.manage', () => ({
   listOrders: (...args: unknown[]) => mockListOrders(...args),
@@ -17,6 +19,9 @@ jest.mock('./orders.manage', () => ({
   updateOrderWithFullPayload: (...args: unknown[]) =>
     mockUpdateOrderWithFullPayload(...args),
   cancelOrder: (...args: unknown[]) => mockCancelOrder(...args),
+  patchOrderDetail: (...args: unknown[]) => mockPatchOrderDetail(...args),
+  generateOrderResponseForOrder: (...args: unknown[]) =>
+    mockGenerateOrderResponseForOrder(...args),
 }));
 
 import app from '../app';
@@ -115,49 +120,119 @@ describe('GET /v1/orders/:id/xml', () => {
   });
 });
 
-describe('Order lifecycle (501)', () => {
-  it('PUT /v1/orders/:id/change returns 501 and points to v2', async () => {
-    const res = await request(app).put('/v1/orders/oid/change').send({});
-    expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('ORDER_CHANGE_USE_V2');
-  });
-
-  it('PUT /orders/:id/change returns 501 and points to v2', async () => {
-    const res = await request(app).put('/orders/oid/change').send({});
-    expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('ORDER_CHANGE_USE_V2');
-  });
-
-  it('POST /v1/orders/:id/cancel returns 501', async () => {
-    const res = await request(app).post('/v1/orders/oid/cancel').send({});
-    expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('ORDER_CANCEL_USE_V2');
-  });
-  it('POST /v1/orders/:id/response returns 501', async () => {
+describe('POST /v1/orders/:id/response', () => {
+  it('returns 400 when response_code is missing', async () => {
     const res = await request(app).post('/v1/orders/oid/response').send({});
-    expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('ORDER_RESPONSE_NOT_IMPLEMENTED');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
-  it('PATCH /v1/orders/:id/detail returns 501', async () => {
-    const res = await request(app).patch('/v1/orders/oid/detail').send({});
-
-    expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('ORDER_DETAIL_NOT_IMPLEMENTED');
-  });
-});
-
-describe('PUT /v2/orders/:id/change', () => {
   it('returns 500 when Supabase env is not set', async () => {
     delete process.env.SUPABASE_URL;
     delete process.env.SUPABASE_ANON_KEY;
-    const res = await request(app).put('/v2/orders/u1/change').send(validBody);
+    const res = await request(app)
+      .post('/v1/orders/oid/response')
+      .send({ response_code: 'ACCEPTED' });
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe('ORDER_RESPONSE_ERROR');
+  });
+
+  it('returns 404 when order does not exist', async () => {
+    mockGenerateOrderResponseForOrder.mockResolvedValue(null);
+    const res = await request(app)
+      .post('/v1/orders/missing/response')
+      .send({ response_code: 'ACCEPTED' });
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('ORDER_NOT_FOUND');
+  });
+
+  it('returns 201 with ubl_xml when generation succeeds', async () => {
+    mockGenerateOrderResponseForOrder.mockResolvedValue({
+      orderID: 'o1',
+      responseID: 'r1',
+      ubl_xml: '<OrderResponse/>',
+    });
+    const res = await request(app)
+      .post('/v1/orders/o1/response')
+      .send({ response_code: 'ACCEPTED', note: 'OK' });
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toEqual({
+      orderID: 'o1',
+      responseID: 'r1',
+      ubl_xml: '<OrderResponse/>',
+    });
+  });
+});
+
+describe('PATCH /v1/orders/:id/detail', () => {
+  it('returns 400 when body is empty', async () => {
+    const res = await request(app).patch('/v1/orders/oid/detail').send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('returns 500 when Supabase env is not set', async () => {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_ANON_KEY;
+    const res = await request(app)
+      .patch('/v1/orders/oid/detail')
+      .send({ currency: 'USD' });
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe('UPDATE_ORDER_DETAIL_ERROR');
+  });
+
+  it('returns 404 when order does not exist', async () => {
+    mockPatchOrderDetail.mockResolvedValue(null);
+    const res = await request(app)
+      .patch('/v1/orders/missing/detail')
+      .send({ order_note: 'Hi' });
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('ORDER_NOT_FOUND');
+  });
+
+  it('returns 400 when order is recurring', async () => {
+    mockPatchOrderDetail.mockRejectedValue(
+      new AppError(
+        'USE_RECURRING_PATCH',
+        'Recurring orders must be updated with PATCH /orders/recurring/{id}.',
+        400
+      )
+    );
+    const res = await request(app)
+      .patch('/v1/orders/rec-id/detail')
+      .send({ currency: 'EUR' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('USE_RECURRING_PATCH');
+  });
+
+  it('returns 200 when patch succeeds', async () => {
+    mockPatchOrderDetail.mockResolvedValue({
+      orderID: 'o1',
+      currency: 'USD',
+      issue_date: '2024-03-01',
+      order_note: 'Updated',
+      ubl_xml: '<Order/>',
+    });
+    const res = await request(app)
+      .patch('/v1/orders/o1/detail')
+      .send({ currency: 'USD' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.ubl_xml).toBe('<Order/>');
+  });
+});
+
+describe('PUT /orders/:id/change', () => {
+  it('returns 500 when Supabase env is not set', async () => {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_ANON_KEY;
+    const res = await request(app).put('/orders/u1/change').send(validBody);
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe('UPDATE_ORDER_ERROR');
   });
 
   it('returns 400 when body is invalid', async () => {
-    const res = await request(app).put('/v2/orders/u1/change').send({});
+    const res = await request(app).put('/orders/u1/change').send({});
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
@@ -167,7 +242,7 @@ describe('PUT /v2/orders/:id/change', () => {
       orderID: 'u1',
       ubl_xml: '<Order/>',
     });
-    const res = await request(app).put('/v2/orders/u1/change').send(validBody);
+    const res = await request(app).put('/orders/u1/change').send(validBody);
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.message).toBe('Order updated successfully.');
@@ -179,19 +254,19 @@ describe('PUT /v2/orders/:id/change', () => {
       new AppError('ORDER_NOT_FOUND', 'Order with the given ID does not exist.', 404)
     );
 
-    const res = await request(app).put('/v2/orders/missing/change').send(validBody);
+    const res = await request(app).put('/orders/missing/change').send(validBody);
 
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('ORDER_NOT_FOUND');
   });
 });
 
-describe('POST /v2/orders/:id/cancel', () => {
+describe('POST /orders/:id/cancel', () => {
   it('returns 500 when Supabase env is not set', async () => {
     delete process.env.SUPABASE_URL;
     delete process.env.SUPABASE_ANON_KEY;
 
-    const res = await request(app).post('/v2/orders/u1/cancel').send({});
+    const res = await request(app).post('/orders/u1/cancel').send({});
 
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe('CANCEL_ORDER_ERROR');
@@ -202,7 +277,7 @@ describe('POST /v2/orders/:id/cancel', () => {
       new AppError('ORDER_NOT_FOUND', 'Order with the given ID does not exist.', 404)
     );
 
-    const res = await request(app).post('/v2/orders/missing/cancel').send({});
+    const res = await request(app).post('/orders/missing/cancel').send({});
 
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('ORDER_NOT_FOUND');
@@ -211,7 +286,7 @@ describe('POST /v2/orders/:id/cancel', () => {
   it('returns 200 when cancel succeeds', async () => {
     mockCancelOrder.mockResolvedValue({ orderID: 'u1' });
 
-    const res = await request(app).post('/v2/orders/u1/cancel').send({});
+    const res = await request(app).post('/orders/u1/cancel').send({});
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);

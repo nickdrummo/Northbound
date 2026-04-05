@@ -2,6 +2,11 @@ import { XMLBuilder } from 'fast-xml-parser';
 import { randomUUID } from 'crypto';
 import { OrderInput, UBLResult, Party, OrderLine } from './order.types';
 
+export interface OrderResponseUBLResult {
+  responseID: string;
+  ubl_xml: string;
+}
+
 const builder = new XMLBuilder({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
@@ -89,4 +94,36 @@ function buildOrderLine(line: OrderLine, index: number, currency: string) {
       },
     },
   };
+}
+
+/** Minimal UBL 2.1 OrderResponse referencing an existing Order by id. */
+export function generateOrderResponseUBL(params: {
+  referencedOrderID: string;
+  responseCode: string;
+  issueDate: string;
+  note?: string;
+}): OrderResponseUBLResult {
+  const responseID = randomUUID();
+  const ublObject = {
+    OrderResponse: {
+      '@_xmlns': 'urn:oasis:names:specification:ubl:schema:xsd:OrderResponse-2',
+      '@_xmlns:cbc': 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2',
+      '@_xmlns:cac': 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2',
+      'cbc:UBLVersionID': '2.1',
+      'cbc:ID': responseID,
+      'cbc:IssueDate': params.issueDate,
+      'cbc:Note': params.note ?? '',
+      'cac:OrderReference': {
+        'cbc:ID': params.referencedOrderID,
+      },
+      'cac:DocumentResponse': {
+        'cbc:ResponseCode': params.responseCode,
+      },
+    },
+  };
+
+  const ubl_xml =
+    '<?xml version="1.0" encoding="UTF-8"?>\n' + builder.build(ublObject);
+
+  return { responseID, ubl_xml };
 }

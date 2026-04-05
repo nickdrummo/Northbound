@@ -26,9 +26,8 @@ app.get('/', (_req, res) => {
 app.use('/health', healthRouter);
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use(authRouter);
-// Swagger and other consumers use /orders; keep /v1/orders for backward compatibility
+// `/orders` and `/v1/orders` mount the same router (backward-compatible alias).
 app.use('/orders', ordersRouter);
 app.use('/v1/orders', ordersRouter);
-app.use('/v2/orders', ordersRouter);
 
 export default app;
