@@ -257,6 +257,131 @@ paths:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
 
+
+  /orders/recurring:
+    post:
+      tags: [Orders]
+      summary: Create a recurring order
+      description: Creates a recurring order template that repeats on a defined schedule. The order template is stored and can be retrieved, updated, or deleted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecurringOrderCreateRequest"
+      responses:
+        "201":
+          description: Recurring order created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StandardResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/RecurringOrderObject"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /orders/recurring/{orderID}:
+    patch:
+      tags: [Orders]
+      summary: Update a recurring order
+      description: Partially updates an existing recurring order template. Only provided fields are updated. If order_lines is provided, they replace all existing lines.
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecurringOrderUpdateRequest"
+      responses:
+        "200":
+          description: Recurring order updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StandardResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          orderID:
+                            type: string
+                            format: uuid
+        "404":
+          description: Recurring order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+    delete:
+      tags: [Orders]
+      summary: Delete a recurring order
+      description: Deletes a recurring order template and its associated order lines. Returns the deleted order ID.
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Recurring order deleted successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StandardResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          orderID:
+                            type: string
+                            format: uuid
+        "404":
+          description: Recurring order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+
   /orders/{orderID}:
     get:
       tags: [Orders]
@@ -643,6 +768,9 @@ components:
         version:
           type: string
           example: "1.0.0"
+        dbStatus:
+          type: string
+          example: UP
 
     HealthResponse:
       allOf:
@@ -851,6 +979,94 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/OrderObject"
+
+
+    RecurringOrderUpdateRequest:
+      type: object
+      minProperties: 1
+      description: Partial update for a recurring order. All fields are optional — at least one must be provided.
+
+    RecurringOrderCreateRequest:
+      type: object
+      required:
+        - buyer
+        - seller
+        - currency
+        - order_lines
+        - frequency
+        - recur_interval
+        - recur_start_date
+      properties:
+        buyer:
+          $ref: "#/components/schemas/Party"
+        seller:
+          $ref: "#/components/schemas/Party"
+        currency:
+          type: string
+          example: AUD
+        order_note:
+          type: string
+        order_lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/OrderLine"
+        frequency:
+          type: string
+          enum: [DAILY, WEEKLY, MONTHLY]
+          example: MONTHLY
+        recur_interval:
+          type: integer
+          minimum: 1
+          example: 2
+        recur_start_date:
+          type: string
+          format: date
+          example: "2026-04-01"
+        recur_end_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-12-31"
+
+    RecurringOrderObject:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        buyer_id:
+          type: string
+          format: uuid
+        seller_id:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          example: AUD
+        order_note:
+          type: string
+          nullable: true
+        is_recurring:
+          type: boolean
+          example: true
+        frequency:
+          type: string
+          enum: [DAILY, WEEKLY, MONTHLY]
+        recur_interval:
+          type: integer
+          example: 1
+        recur_start_date:
+          type: string
+          format: date
+        recur_end_date:
+          type: string
+          format: date
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
 
     UpdatePartyCountryRequest:
       type: object
