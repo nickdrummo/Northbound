@@ -7,6 +7,10 @@ import {
     RecurringOrder,
     OrderDetailPatch,
     OrderResponseInput,
+    PartySession,
+    PartyReport,
+    PartyOrderSummary,
+    CurrencyBreakdown,
 } from "./order.types";
 import { createClient } from '@supabase/supabase-js';
 import { generateUBL, generateOrderResponseUBL } from './ubl.service';
@@ -861,4 +865,139 @@ export async function updateRecurringOrder(
     }
 
     return updated as RecurringOrder;
+}
+
+// Returns the order history for a party identified by external_id and role
+export async function getOrdersByParty(
+    externalID: string,
+    role: 'buyer' | 'seller'
+): Promise<PartySession | null> {
+    const supabase = getSupabase();
+
+    const { data: partyRow, error: partyErr } = await supabase
+        .from('parties')
+        .select('*')
+        .eq('external_id', externalID)
+        .single();
+
+    if (partyErr || !partyRow) {
+        return null;
+    }
+
+    const column = role === 'buyer' ? 'buyer_id' : 'seller_id';
+
+    const { data: orders, error: ordersErr } = await supabase
+        .from('orders')
+        .select('*')
+        .eq(column, partyRow.id)
+        .order('issue_date', { ascending: true });
+
+    if (ordersErr) {
+        throw new Error(`Failed to retrieve orders: ${ordersErr.message}`);
+    }
+
+    const orderRows = orders ?? [];
+
+    // Fetch all order lines in one query
+    const orderIds = orderRows.map((o: any) => o.id);
+    let linesByOrderId: Record<string, OrderLine[]> = {};
+
+    if (orderIds.length > 0) {
+        const { data: lines, error: linesErr } = await supabase
+            .from('order_lines')
+            .select('*')
+            .in('order_id', orderIds);
+
+        if (linesErr) {
+            throw new Error(`Failed to retrieve order lines: ${linesErr.message}`);
+        }
+
+        for (const line of lines ?? []) {
+            if (!linesByOrderId[line.order_id]) {
+                linesByOrderId[line.order_id] = [];
+            }
+            (linesByOrderId[line.order_id] as OrderLine[]).push({
+                line_id: line.line_id,
+                description: line.description,
+                quantity: line.quantity,
+                unit_price: line.unit_price,
+                unit_code: line.unit_code,
+            });
+        }
+    }
+
+    const party: Party = {
+        external_id: partyRow.external_id,
+        name: partyRow.name,
+        email: partyRow.email ?? undefined,
+        street: partyRow.street ?? undefined,
+        city: partyRow.city ?? undefined,
+        country: partyRow.country ?? undefined,
+        postal_code: partyRow.postal_code ?? undefined,
+    };
+
+    return {
+        party,
+        role,
+        orders: orderRows.map((order: any) => ({
+            order_id: order.id,
+            currency: order.currency,
+            issue_date: order.issue_date,
+            order_note: order.order_note ?? null,
+            is_recurring: order.is_recurring ?? false,
+            order_lines: linesByOrderId[order.id] ?? [],
+        })),
+    };
+}
+
+// Returns an aggregated spending/sales report for a party
+export async function getPartyReport(
+    externalID: string,
+    role: 'buyer' | 'seller'
+): Promise<PartyReport | null> {
+    const session = await getOrdersByParty(externalID, role);
+    if (!session) return null;
+
+    const orderSummaries: PartyOrderSummary[] = session.orders.map((order) => {
+        const orderValue = order.order_lines.reduce(
+            (sum, line) => sum + line.quantity * line.unit_price,
+            0
+        );
+        return {
+            order_id: order.order_id,
+            currency: order.currency,
+            issue_date: order.issue_date,
+            order_note: order.order_note,
+            order_value: Math.round(orderValue * 100) / 100,
+            line_count: order.order_lines.length,
+        };
+    });
+
+    const totalValue = orderSummaries.reduce((sum, o) => sum + o.order_value, 0);
+    const orderCount = orderSummaries.length;
+    const avgOrderValue = orderCount > 0 ? totalValue / orderCount : 0;
+
+    const currencies: Record<string, CurrencyBreakdown> = {};
+    for (const o of orderSummaries) {
+        if (!currencies[o.currency]) {
+            currencies[o.currency] = { order_count: 0, total_value: 0 };
+        }
+        const cb = currencies[o.currency] as CurrencyBreakdown;
+        cb.order_count++;
+        cb.total_value = Math.round((cb.total_value + o.order_value) * 100) / 100;
+    }
+
+    const sortedDates = orderSummaries.map((o) => o.issue_date).filter(Boolean).sort();
+
+    return {
+        party: session.party,
+        role,
+        order_count: orderCount,
+        total_value: Math.round(totalValue * 100) / 100,
+        avg_order_value: Math.round(avgOrderValue * 100) / 100,
+        currencies,
+        first_order_date: sortedDates[0] ?? null,
+        last_order_date: sortedDates[sortedDates.length - 1] ?? null,
+        orders: orderSummaries,
+    };
 }
