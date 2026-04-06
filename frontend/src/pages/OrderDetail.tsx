@@ -148,10 +148,12 @@ export default function OrderDetail() {
   if (loading) return <div className={s.page}><p className={s.loadingCell}>Loading order…</p></div>;
   if (error || !order) return <div className={s.page}><p className={s.error}>{error ?? 'Order not found.'}</p></div>;
 
-  const buyerName     = updatedParties?.buyer.name    ?? details?.buyerName  ?? '';
-  const buyerCountry  = updatedParties?.buyer.country ?? '';
-  const sellerName    = updatedParties?.seller.name   ?? details?.sellerName ?? '';
-  const sellerCountry = updatedParties?.seller.country ?? '';
+  const buyerName       = updatedParties?.buyer.name    ?? details?.buyerName       ?? '';
+  const buyerEndpointId = details?.buyerEndpointId ?? order.buyer_id;
+  const buyerCountry    = updatedParties?.buyer.country ?? '';
+  const sellerName      = updatedParties?.seller.name   ?? details?.sellerName     ?? '';
+  const sellerEndpointId = details?.sellerEndpointId ?? order.seller_id;
+  const sellerCountry   = updatedParties?.seller.country ?? '';
 
   const lines      = details?.order_lines ?? [];
   const toCurrency = displayCurrency ?? order.currency;
@@ -278,7 +280,7 @@ export default function OrderDetail() {
         <div className={s.detailGrid}>
           <div className={s.detailItem}>
             <span className={s.detailLabel}>Buyer ID</span>
-            <span className={`${s.detailValue} ${s.mono}`}>{order.buyer_id}</span>
+            <span className={`${s.detailValue} ${s.mono}`}>{buyerEndpointId}</span>
           </div>
           {buyerName && (
             <div className={s.detailItem}>
@@ -294,7 +296,7 @@ export default function OrderDetail() {
           )}
           <div className={s.detailItem}>
             <span className={s.detailLabel}>Seller ID</span>
-            <span className={`${s.detailValue} ${s.mono}`}>{order.seller_id}</span>
+            <span className={`${s.detailValue} ${s.mono}`}>{sellerEndpointId}</span>
           </div>
           {sellerName && (
             <div className={s.detailItem}>
