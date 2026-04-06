@@ -21,10 +21,41 @@ import {
   updateOrderWithFullPayload,
   patchOrderDetail,
   generateOrderResponseForOrder,
+  syncDispatchAdviceXml,
+  upsertDispatchAdvicesForOrder,
 } from './orders.manage';
 import { validateRecurringOrderInput } from '../validation/validateRecurringOrderInput';
 import type { OrderResponseInput } from './order.types';
+import {
+  devexCreateDespatchFromOrderXml,
+  devexListDespatches,
+  devexRetrieveDespatch,
+} from '../integrations/devexDespatch';
+
 const router = Router();
+
+/** Forward DevEx JSON (or text) response to the Express response. */
+async function forwardDevexResponse(
+  res: Response,
+  devexRes: globalThis.Response
+): Promise<void> {
+  const text = await devexRes.text();
+  const ct = devexRes.headers.get('content-type') ?? '';
+  res.status(devexRes.status);
+  if (ct.includes('application/json')) {
+    res.type('application/json').send(text);
+  } else {
+    res.type(ct || 'text/plain').send(text);
+  }
+}
+
+function tryParseJson<T = unknown>(text: string): T | null {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
 
 // Create-order handler: used for both POST / and POST /generate (Swagger uses POST /orders; we also support /v1/orders/generate)
 async function handleCreateOrder(req: Request, res: Response): Promise<void> {
@@ -128,6 +159,26 @@ router.post('/recurring', async (req: Request, res: Response): Promise<void> => 
   }
 });
 
+/**
+ * List Despatch Advice records from the integrated DevEx API (Category 2).
+ * Registered before `GET /:id` so `despatch` is not captured as an order UUID.
+ */
+router.get('/despatch/list', async (_req: Request, res: Response) => {
+  try {
+    const devexRes = await devexListDespatches();
+    await forwardDevexResponse(res, devexRes);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    const status = message.includes('DEVEX_API_KEY') ? 503 : 502;
+    res.status(status).json(
+      fail('DevEx despatch list failed', {
+        code: 'DEVEX_DESPATCH_ERROR',
+        message,
+      })
+    );
+  }
+});
+
 router.get('/', async (req: Request, res: Response) => {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
     return res.status(500).json(
@@ -199,6 +250,151 @@ router.get('/:id/xml', async (req: Request, res: Response) => {
       fail('Failed to retrieve order XML', {
         code: 'RETRIEVE_ORDER_XML_ERROR',
         message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
+});
+
+/**
+ * Create Despatch Advice at DevEx using this order's UBL Order XML.
+ * @see https://devex.cloud.tcore.network/api-docs/ — POST /api/v1/despatch/create
+ */
+router.post('/:id/despatch', async (req: Request, res: Response) => {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    res.status(500).json(
+      fail('Failed to create despatch advice', {
+        code: 'DESPATCH_CREATE_ERROR',
+        message: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set',
+      })
+    );
+    return;
+  }
+
+  let orderXml: string;
+  try {
+    orderXml = await retrieveOrderXML(String(req.params.id));
+  } catch {
+    res.status(404).json(
+      fail('Order not found', {
+        code: 'ORDER_NOT_FOUND',
+        message: 'Order with the given ID does not exist.',
+      })
+    );
+    return;
+  }
+
+  try {
+    const devexRes = await devexCreateDespatchFromOrderXml(orderXml);
+    const text = await devexRes.text();
+    const ct = devexRes.headers.get('content-type') ?? '';
+
+    // If DevEx created advice IDs successfully, store them locally.
+    if (devexRes.ok && ct.includes('application/json')) {
+      const json = tryParseJson<{ success?: boolean; adviceIds?: string[] }>(text);
+      const adviceIds = json?.adviceIds?.filter((x) => typeof x === 'string') ?? [];
+      if (json?.success === true && adviceIds.length > 0) {
+        try {
+          await upsertDispatchAdvicesForOrder(String(req.params.id), adviceIds, 'CREATED');
+        } catch (dbErr) {
+          // Don't fail the integration call if local persistence fails; return DevEx response.
+          // (You can surface this later via logs / monitoring.)
+          void dbErr;
+        }
+      }
+    }
+
+    res.status(devexRes.status);
+    if (ct.includes('application/json')) {
+      res.type('application/json').send(text);
+    } else {
+      res.type(ct || 'text/plain').send(text);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    const status = message.includes('DEVEX_API_KEY') ? 503 : 502;
+    res.status(status).json(
+      fail('DevEx despatch create failed', {
+        code: 'DEVEX_DESPATCH_ERROR',
+        message,
+      })
+    );
+  }
+});
+
+/**
+ * Retrieve Despatch Advice from DevEx for this order.
+ * Query: `adviceId` (UUID) uses DevEx search-type=advice-id.
+ * Omit `adviceId` to search by this order's UBL XML (search-type=order); URLs can be large.
+ */
+router.get('/:id/despatch', async (req: Request, res: Response) => {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    res.status(500).json(
+      fail('Failed to retrieve despatch advice', {
+        code: 'DESPATCH_RETRIEVE_ERROR',
+        message: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set',
+      })
+    );
+    return;
+  }
+
+  const adviceId = req.query.adviceId;
+  let devexRes: globalThis.Response;
+  let orderIdForStore = String(req.params.id);
+
+  try {
+    if (typeof adviceId === 'string' && adviceId.trim() !== '') {
+      devexRes = await devexRetrieveDespatch('advice-id', adviceId.trim());
+    } else {
+      let orderXml: string;
+      try {
+        orderXml = await retrieveOrderXML(String(req.params.id));
+      } catch {
+        res.status(404).json(
+          fail('Order not found', {
+            code: 'ORDER_NOT_FOUND',
+            message: 'Order with the given ID does not exist.',
+          })
+        );
+        return;
+      }
+      devexRes = await devexRetrieveDespatch('order', orderXml);
+    }
+
+    const text = await devexRes.text();
+    const ct = devexRes.headers.get('content-type') ?? '';
+
+    // If we retrieved a despatch advice successfully, store XML + sync timestamp.
+    if (devexRes.ok && ct.includes('application/json')) {
+      const json = tryParseJson<{ ['despatch-advice']?: string; ['advice-id']?: string }>(text);
+      const despatchXml = json?.['despatch-advice'];
+      const devexAdviceId = json?.['advice-id'];
+      if (typeof despatchXml === 'string' && typeof devexAdviceId === 'string') {
+        try {
+          await syncDispatchAdviceXml({
+            orderID: orderIdForStore,
+            devexAdviceID: devexAdviceId,
+            dispatchXml: despatchXml,
+            status: 'RETRIEVED',
+          });
+        } catch (dbErr) {
+          void dbErr;
+        }
+      }
+    }
+
+    res.status(devexRes.status);
+    if (ct.includes('application/json')) {
+      res.type('application/json').send(text);
+    } else {
+      res.type(ct || 'text/plain').send(text);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    const status = message.includes('DEVEX_API_KEY') ? 503 : 502;
+    res.status(status).json(
+      fail('DevEx despatch retrieve failed', {
+        code: 'DEVEX_DESPATCH_ERROR',
+        message,
       })
     );
   }
