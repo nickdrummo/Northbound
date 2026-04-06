@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import SummaryCard from '../components/dashboard/SummaryCard';
-import { useOrders } from '../hooks/useOrders';
+import { useMyOrders } from '../hooks/useMyOrders';
 import { useOrderStatus } from '../hooks/useOrderStatus';
 import { fetchBuyerReport, fetchSellerReport, PartyReport } from '../api/parties';
 import styles from './Dashboard.module.css';
@@ -10,7 +10,7 @@ import styles from './Dashboard.module.css';
 function Dashboard() {
   const navigate = useNavigate();
   const { role, externalId } = useAuth();
-  const { orders, loading, error } = useOrders();
+  const { orders, loading, error } = useMyOrders();
   const { getStatus } = useOrderStatus();
 
   const [report, setReport]         = useState<PartyReport | null>(null);
