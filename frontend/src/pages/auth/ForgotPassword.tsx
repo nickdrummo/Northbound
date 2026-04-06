@@ -25,9 +25,9 @@ function ForgotPassword() {
   }
 
   return (
-    <div className={styles.wrapper}>
+    <div className={styles.wrapperSimple}>
       <div className={styles.card}>
-        <p className={styles.brand}>Northbound</p>
+        <p className={styles.brand}><span className={styles.brandDot} />Northbound</p>
         <p className={styles.heading}>Reset your password</p>
 
         {submitted ? (

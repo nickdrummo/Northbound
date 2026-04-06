@@ -45,10 +45,10 @@ export default function Settings() {
           <span>Northbound</span>
 
           <span className={s.detailLabel}>Purpose</span>
-          <span>University event procurement for student societies</span>
+          <span>Purchase order management for small and medium businesses</span>
 
           <span className={s.detailLabel}>Document Standard</span>
-          <span>PEPPOL BIS Billing 3.0 (UBL 2.1)</span>
+          <span>UBL 2.1</span>
 
           <span className={s.detailLabel}>Supported Currencies</span>
           <span>AUD, USD, GBP, EUR, NZD</span>

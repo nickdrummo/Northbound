@@ -22,8 +22,8 @@ function Dashboard() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1 className={styles.title}>Northbound</h1>
-        <p className={styles.subtitle}>University event procurement dashboard</p>
+        <h1 className={styles.title}>Dashboard</h1>
+        <p className={styles.subtitle}>Purchase order management for your business</p>
       </div>
 
       <section className={styles.section}>
