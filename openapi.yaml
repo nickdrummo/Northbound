@@ -20,6 +20,10 @@ tags:
   - name: Health
   - name: Auth
   - name: Orders
+  - name: Integrations
+    description: >
+      Proxies to external ecosystem services (e.g. DevEx Category 2 Despatch).
+      Requires server env DEVEX_API_KEY. Same paths under /v1/orders/....
 
 security:
   - bearerAuth: []
@@ -468,6 +472,111 @@ paths:
                 type: string
         "404":
           description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /orders/despatch/list:
+    get:
+      tags: [Integrations]
+      summary: List Despatch Advice records (DevEx proxy)
+      description: >
+        Forwards to DevEx `GET /api/v1/despatch/list` with your team's `Api-Key`.
+        Returns despatch advice documents associated with the API key.
+        [DevEx Swagger](https://devex.cloud.tcore.network/api-docs/).
+      security: []
+      responses:
+        "200":
+          description: Passthrough JSON from DevEx (shape may vary)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid DevEx API key (upstream)
+        "503":
+          description: DEVEX_API_KEY not configured on Northbound server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /orders/{orderID}/despatch:
+    post:
+      tags: [Integrations]
+      summary: Create Despatch Advice from stored Order XML (DevEx proxy)
+      description: >
+        Loads this order's UBL Order XML (same as `GET /orders/{orderID}/xml`), then calls
+        DevEx `POST /api/v1/despatch/create` with `Content-Type: application/xml`.
+        Response status and body are passed through from DevEx.
+      security: []
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: DevEx success (e.g. advice IDs)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Invalid XML (upstream) or order not found
+        "401":
+          description: Missing or invalid DevEx API key (upstream)
+        "404":
+          description: Order not found in Northbound storage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "503":
+          description: DEVEX_API_KEY not configured on Northbound server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+    get:
+      tags: [Integrations]
+      summary: Retrieve Despatch Advice by advice ID or by order XML (DevEx proxy)
+      description: >
+        If query `adviceId` is set, forwards to DevEx `GET /api/v1/despatch/retrieve`
+        with `search-type=advice-id`. Otherwise loads this order's UBL XML and uses
+        `search-type=order` (query string may be large).
+      security: []
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: adviceId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: DevEx despatch advice UUID (preferred).
+      responses:
+        "200":
+          description: Passthrough JSON from DevEx
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "404":
+          description: Order not found or advice not found (upstream)
+        "503":
+          description: DEVEX_API_KEY not configured on Northbound server
           content:
             application/json:
               schema:
