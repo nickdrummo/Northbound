@@ -20,6 +20,7 @@ tags:
   - name: Health
   - name: Auth
   - name: Orders
+  - name: Parties
 
 security:
   - bearerAuth: []
@@ -679,6 +680,138 @@ paths:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
             
+  /parties/buyers/{externalID}/orders:
+    get:
+      tags: [Parties]
+      summary: List all orders for a buyer
+      description: Returns every order in which the specified party appears as the buyer, together with its order lines.
+      parameters:
+        - name: externalID
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The buyer's external_id as stored in the parties table
+      responses:
+        "200":
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartySessionResponse"
+        "404":
+          description: No buyer with the given external ID exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Supabase not configured or query failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /parties/sellers/{externalID}/orders:
+    get:
+      tags: [Parties]
+      summary: List all orders for a seller
+      description: Returns every order in which the specified party appears as the seller, together with its order lines.
+      parameters:
+        - name: externalID
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The seller's external_id as stored in the parties table
+      responses:
+        "200":
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartySessionResponse"
+        "404":
+          description: No seller with the given external ID exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Supabase not configured or query failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /parties/buyers/{externalID}/report:
+    get:
+      tags: [Parties]
+      summary: Spending report for a buyer
+      description: |
+        Returns an aggregated spending report for the specified buyer: total spend, order count,
+        average order value, per-currency breakdowns, date range, and a summary of each order.
+      parameters:
+        - name: externalID
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The buyer's external_id
+      responses:
+        "200":
+          description: Report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartyReportResponse"
+        "404":
+          description: No buyer with the given external ID exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Supabase not configured or query failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /parties/sellers/{externalID}/report:
+    get:
+      tags: [Parties]
+      summary: Sales report for a seller
+      description: |
+        Returns an aggregated sales report for the specified seller: total revenue, order count,
+        average order value, per-currency breakdowns, date range, and a summary of each order.
+      parameters:
+        - name: externalID
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The seller's external_id
+      responses:
+        "200":
+          description: Report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartyReportResponse"
+        "404":
+          description: No seller with the given external ID exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Supabase not configured or query failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
   /v2/orders/{orderID}/party-country:
     patch:
       tags:
@@ -856,7 +989,7 @@ paths:
                     data: null
                     error:
                       code: UPDATE_ORDER_ERROR
-                      message: Failed to update buyer country: DB update failed
+                      message: "Failed to update buyer country: DB update failed"
 
 components:
   securitySchemes:
@@ -1406,3 +1539,125 @@ components:
         ubl_xml:
           type: string
           description: Regenerated UBL 2.1 Order XML
+
+    PartySessionOrder:
+      type: object
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          example: AUD
+        issue_date:
+          type: string
+          format: date
+        order_note:
+          type: string
+          nullable: true
+        is_recurring:
+          type: boolean
+          example: false
+        order_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLine"
+
+    PartySessionData:
+      type: object
+      properties:
+        party:
+          $ref: "#/components/schemas/Party"
+        role:
+          type: string
+          enum: [buyer, seller]
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartySessionOrder"
+
+    PartySessionResponse:
+      allOf:
+        - $ref: "#/components/schemas/StandardResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/PartySessionData"
+
+    PartyOrderSummary:
+      type: object
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          example: AUD
+        issue_date:
+          type: string
+          format: date
+        order_note:
+          type: string
+          nullable: true
+        order_value:
+          type: number
+          description: Sum of quantity multiplied by unit_price for all lines on this order
+          example: 149.97
+        line_count:
+          type: integer
+          example: 2
+
+    CurrencyBreakdown:
+      type: object
+      properties:
+        order_count:
+          type: integer
+          example: 3
+        total_value:
+          type: number
+          example: 449.91
+
+    PartyReportData:
+      type: object
+      properties:
+        party:
+          $ref: "#/components/schemas/Party"
+        role:
+          type: string
+          enum: [buyer, seller]
+        order_count:
+          type: integer
+          example: 5
+        total_value:
+          type: number
+          description: Sum of all order values rounded to two decimal places
+          example: 749.85
+        avg_order_value:
+          type: number
+          description: Average order value rounded to two decimal places
+          example: 149.97
+        currencies:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/CurrencyBreakdown"
+          description: Per-currency breakdown keyed by ISO 4217 code
+        first_order_date:
+          type: string
+          format: date
+          nullable: true
+        last_order_date:
+          type: string
+          format: date
+          nullable: true
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartyOrderSummary"
+
+    PartyReportResponse:
+      allOf:
+        - $ref: "#/components/schemas/StandardResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/PartyReportData"

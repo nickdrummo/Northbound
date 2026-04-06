@@ -85,3 +85,42 @@ export interface OrderResponseInput {
   issue_date?: string;
   note?: string;
 }
+
+export interface PartyOrderSummary {
+  order_id: string;
+  currency: string;
+  issue_date: string;
+  order_note: string | null;
+  order_value: number;
+  line_count: number;
+}
+
+export interface CurrencyBreakdown {
+  order_count: number;
+  total_value: number;
+}
+
+export interface PartyReport {
+  party: Party;
+  role: 'buyer' | 'seller';
+  order_count: number;
+  total_value: number;
+  avg_order_value: number;
+  currencies: Record<string, CurrencyBreakdown>;
+  first_order_date: string | null;
+  last_order_date: string | null;
+  orders: PartyOrderSummary[];
+}
+
+export interface PartySession {
+  party: Party;
+  role: 'buyer' | 'seller';
+  orders: Array<{
+    order_id: string;
+    currency: string;
+    issue_date: string;
+    order_note: string | null;
+    is_recurring: boolean;
+    order_lines: OrderLine[];
+  }>;
+}

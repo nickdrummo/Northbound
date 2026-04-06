@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import healthRouter from './health/health.router';
 import authRouter from './auth/auth.routes';
 import ordersRouter from './orders/orders.router';
+import partiesRouter from './parties/parties.router';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import { readFileSync } from 'fs';
@@ -29,5 +30,6 @@ app.use(authRouter);
 // `/orders` and `/v1/orders` mount the same router (backward-compatible alias).
 app.use('/orders', ordersRouter);
 app.use('/v1/orders', ordersRouter);
+app.use('/parties', partiesRouter);
 
 export default app;
