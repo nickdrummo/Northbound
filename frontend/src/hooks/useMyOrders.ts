@@ -11,15 +11,15 @@ interface UseMyOrdersResult {
 }
 
 /**
- * Returns only the orders that belong to the logged-in user.
+ * Returns orders for the logged-in user.
  *
- * - Buyer with externalId  →  GET /parties/buyers/{externalId}/orders
- * - Seller with externalId →  GET /parties/sellers/{externalId}/orders
- * - No externalId set      →  falls back to GET /orders (all orders)
+ * Strategy (in order of preference):
+ *  1. If externalId is set → try GET /parties/{role}/{externalId}/orders
+ *  2. If that returns 404 (party not found yet) or the user has no externalId
+ *     → fall back to GET /orders so the user always sees their data
  *
- * The PartyOrder shape from the party endpoint is mapped into the same
- * Order interface used everywhere else in the app so callers don't need
- * to care about the difference.
+ * This handles the common case where the user created orders before setting up
+ * their profile, or entered a different external_id in the order form.
  */
 export function useMyOrders(): UseMyOrdersResult {
   const { role, externalId } = useAuth();
@@ -35,10 +35,10 @@ export function useMyOrders(): UseMyOrdersResult {
     setLoading(true);
     setError(null);
 
-    // No externalId — user hasn't set up their profile yet, show all orders
+    // No externalId — user hasn't finished profile setup; show all orders
     if (!externalId) {
       fetchOrders()
-        .then((data) => { if (!cancelled) { setOrders(data); } })
+        .then((data) => { if (!cancelled) setOrders(data); })
         .catch((err: Error) => { if (!cancelled) setError(err.message); })
         .finally(() => { if (!cancelled) setLoading(false); });
       return () => { cancelled = true; };
@@ -49,16 +49,21 @@ export function useMyOrders(): UseMyOrdersResult {
     fetcher(externalId)
       .then((session) => {
         if (cancelled) return;
+
         if (!session) {
-          // 404 from the party endpoint — this user has no orders yet
-          setOrders([]);
-          return;
+          // 404: this externalId has no orders yet, or the user created orders
+          // with a different external_id.  Fall back to GET /orders so the user
+          // isn't left staring at an empty list.
+          return fetchOrders().then((data) => {
+            if (!cancelled) setOrders(data);
+          });
         }
+
         // Map PartyOrder → Order so every page can use a single type
         const mapped: Order[] = session.orders.map((o) => ({
           id:               o.order_id,
-          buyer_id:         '',   // not returned by party endpoint
-          seller_id:        '',   // not returned by party endpoint
+          buyer_id:         '',
+          seller_id:        '',
           currency:         o.currency,
           issue_date:       o.issue_date,
           order_note:       o.order_note,
@@ -67,7 +72,7 @@ export function useMyOrders(): UseMyOrdersResult {
           recur_interval:   null,
           recur_start_date: null,
           recur_end_date:   null,
-          created_at:       o.issue_date, // approximation — party endpoint omits created_at
+          created_at:       o.issue_date,
         }));
         setOrders(mapped);
       })

@@ -31,16 +31,31 @@ interface PartySectionProps {
   label: string;
   data: Party;
   onChange: (field: keyof Party, value: string) => void;
+  /** When true, the external_id field is read-only (locked to the user's profile ID). */
+  lockExternalId?: boolean;
 }
 
-function PartySection({ label, data, onChange }: PartySectionProps) {
+function PartySection({ label, data, onChange, lockExternalId }: PartySectionProps) {
   return (
     <div className={s.card}>
       <p className={s.sectionHeading}>{label}</p>
       <div className={s.formGrid}>
         <div className={s.formField}>
           <label className={s.required}>ID (external_id)</label>
-          <input value={data.external_id} required onChange={(e) => onChange('external_id', e.target.value)} />
+          {lockExternalId ? (
+            <>
+              <input
+                value={data.external_id}
+                readOnly
+                style={{ background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }}
+              />
+              <p style={{ marginTop: 4, fontSize: '0.72rem', color: '#94a3b8' }}>
+                Locked to your buyer profile ID. Change it in Settings.
+              </p>
+            </>
+          ) : (
+            <input value={data.external_id} required onChange={(e) => onChange('external_id', e.target.value)} />
+          )}
         </div>
         <div className={s.formField}>
           <label className={s.required}>Name</label>
@@ -75,13 +90,13 @@ export default function CreateOrder() {
   const navigate = useNavigate();
   const { role, externalId } = useAuth();
 
-  // Pre-fill buyer with logged-in user's externalId if they are a buyer
-  const defaultBuyer: Party = {
-    ...EMPTY_PARTY,
-    external_id: (role === 'buyer' && externalId) ? externalId : '',
-  };
+  // Buyer external_id is always locked to the user's profile ID so orders stay discoverable
+  const lockedBuyerId = (role === 'buyer' && externalId) ? externalId : '';
 
-  const [buyer, setBuyer]     = useState<Party>(defaultBuyer);
+  const [buyer, setBuyer] = useState<Party>({
+    ...EMPTY_PARTY,
+    external_id: lockedBuyerId,
+  });
   const [seller, setSeller]   = useState<Party>({ ...EMPTY_PARTY });
   const [currency, setCurrency] = useState(getDefaultCurrency);
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
@@ -167,7 +182,7 @@ export default function CreateOrder() {
         </div>
       </div>
 
-      <PartySection label="Buyer (Your Organisation)" data={buyer} onChange={updateBuyer} />
+      <PartySection label="Buyer (Your Organisation)" data={buyer} onChange={updateBuyer} lockExternalId={!!lockedBuyerId} />
       <PartySection label="Seller (Supplier)" data={seller} onChange={updateSeller} />
 
       {/* Order details */}
