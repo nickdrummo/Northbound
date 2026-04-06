@@ -1,7 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useOrder } from '../hooks/useOrder';
-import { cancelOrder, updatePartyCountry } from '../api/orders';
+import {
+  cancelOrder,
+  updatePartyCountry,
+  fetchOrderDetails,
+  ParsedOrderDetails,
+  Party,
+} from '../api/orders';
 import s from '../styles/shared.module.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
@@ -43,12 +49,29 @@ export default function OrderDetail() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
+  // Parsed order details from XML (lines + party names)
+  const [details, setDetails] = useState<ParsedOrderDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+
+  // Party update state — stores full Party objects returned by PATCH
+  const [updatedParties, setUpdatedParties] = useState<{ buyer: Party; seller: Party } | null>(null);
+
   // Party country edit state
   const [countryRole, setCountryRole] = useState<'buyer' | 'seller'>('buyer');
   const [countryCode, setCountryCode] = useState('AU');
   const [countrySubmitting, setCountrySubmitting] = useState(false);
   const [countryError, setCountryError] = useState<string | null>(null);
   const [countrySuccess, setCountrySuccess] = useState(false);
+
+  // Fetch XML-based details (party names + order lines) once order is known
+  useEffect(() => {
+    if (!order) return;
+    setDetailsLoading(true);
+    fetchOrderDetails(order.id)
+      .then(setDetails)
+      .catch(() => { /* non-fatal — XML endpoint may not exist yet */ })
+      .finally(() => setDetailsLoading(false));
+  }, [order]);
 
   async function handleCancel() {
     if (!order) return;
@@ -72,7 +95,26 @@ export default function OrderDetail() {
     setCountryError(null);
     setCountrySuccess(false);
     try {
-      await updatePartyCountry(order.id, countryRole, countryCode);
+      const result = await updatePartyCountry(order.id, countryRole, countryCode);
+      // Store updated party objects so the UI reflects the change immediately
+      setUpdatedParties({ buyer: result.buyer, seller: result.seller });
+      // Also refresh order lines from the response if present
+      if (result.order_lines?.length) {
+        setDetails((prev) =>
+          prev
+            ? {
+                ...prev,
+                order_lines: result.order_lines.map((l) => ({
+                  line_id: l.line_id,
+                  description: l.description,
+                  quantity: l.quantity,
+                  unit_price: l.unit_price,
+                  unit_code: l.unit_code ?? 'EA',
+                })),
+              }
+            : prev,
+        );
+      }
       setCountrySuccess(true);
     } catch (err) {
       setCountryError(err instanceof Error ? err.message : 'Failed to update country');
@@ -83,6 +125,19 @@ export default function OrderDetail() {
 
   if (loading) return <div className={s.page}><p className={s.loadingCell}>Loading order…</p></div>;
   if (error || !order) return <div className={s.page}><p className={s.error}>{error ?? 'Order not found.'}</p></div>;
+
+  // Prefer data from PATCH response (reflects latest save), fall back to XML parse
+  const buyerName    = updatedParties?.buyer.name    ?? details?.buyerName  ?? '';
+  const buyerCountry = updatedParties?.buyer.country ?? '';
+  const sellerName   = updatedParties?.seller.name   ?? details?.sellerName ?? '';
+  const sellerCountry = updatedParties?.seller.country ?? '';
+
+  const lines = details?.order_lines ?? [];
+  const grandTotal = lines.reduce((sum, l) => sum + l.quantity * l.unit_price, 0);
+
+  // Country label for success message
+  const updatedCountryName =
+    COUNTRIES.find((c) => c.code === countryCode)?.name ?? countryCode;
 
   return (
     <div className={s.page}>
@@ -109,6 +164,7 @@ export default function OrderDetail() {
         </div>
       </div>
 
+      {/* Order Information */}
       <div className={s.card}>
         <p className={s.sectionHeading}>Order Information</p>
         <div className={s.detailGrid}>
@@ -143,6 +199,7 @@ export default function OrderDetail() {
         </div>
       </div>
 
+      {/* Parties */}
       <div className={s.card}>
         <p className={s.sectionHeading}>Parties</p>
         <div className={s.detailGrid}>
@@ -150,10 +207,34 @@ export default function OrderDetail() {
             <span className={s.detailLabel}>Buyer ID</span>
             <span className={`${s.detailValue} ${s.mono}`}>{order.buyer_id}</span>
           </div>
+          {buyerName && (
+            <div className={s.detailItem}>
+              <span className={s.detailLabel}>Buyer Name</span>
+              <span className={s.detailValue}>{buyerName}</span>
+            </div>
+          )}
+          {buyerCountry && (
+            <div className={s.detailItem}>
+              <span className={s.detailLabel}>Buyer Country</span>
+              <span className={s.detailValue}>{buyerCountry}</span>
+            </div>
+          )}
           <div className={s.detailItem}>
             <span className={s.detailLabel}>Seller ID</span>
             <span className={`${s.detailValue} ${s.mono}`}>{order.seller_id}</span>
           </div>
+          {sellerName && (
+            <div className={s.detailItem}>
+              <span className={s.detailLabel}>Seller Name</span>
+              <span className={s.detailValue}>{sellerName}</span>
+            </div>
+          )}
+          {sellerCountry && (
+            <div className={s.detailItem}>
+              <span className={s.detailLabel}>Seller Country</span>
+              <span className={s.detailValue}>{sellerCountry}</span>
+            </div>
+          )}
         </div>
 
         {/* Update party country */}
@@ -164,7 +245,7 @@ export default function OrderDetail() {
           <form onSubmit={handleCountryUpdate} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div className={s.formField} style={{ minWidth: 120 }}>
               <label>Party</label>
-              <select value={countryRole} onChange={(e) => setCountryRole(e.target.value as 'buyer' | 'seller')}>
+              <select value={countryRole} onChange={(e) => { setCountryRole(e.target.value as 'buyer' | 'seller'); setCountrySuccess(false); }}>
                 <option value="buyer">Buyer</option>
                 <option value="seller">Seller</option>
               </select>
@@ -181,11 +262,87 @@ export default function OrderDetail() {
               {countrySubmitting ? 'Saving…' : 'Update'}
             </button>
           </form>
-          {countryError  && <p className={s.error}  style={{ marginTop: 10 }}>{countryError}</p>}
-          {countrySuccess && <p className={s.success} style={{ marginTop: 10 }}>Country updated successfully.</p>}
+          {countryError && <p className={s.error} style={{ marginTop: 10 }}>{countryError}</p>}
+          {countrySuccess && updatedParties && (
+            <p className={s.success} style={{ marginTop: 10 }}>
+              {countryRole === 'buyer' ? updatedParties.buyer.name : updatedParties.seller.name} country updated to{' '}
+              <strong>{updatedCountryName} ({countryCode})</strong>.
+            </p>
+          )}
         </div>
       </div>
 
+      {/* Order Lines */}
+      {detailsLoading ? (
+        <div className={s.card}>
+          <p className={s.loadingCell}>Loading order lines…</p>
+        </div>
+      ) : lines.length > 0 ? (
+        <div className={s.card}>
+          <p className={s.sectionHeading}>Order Lines</p>
+          <table className={s.table}>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Description</th>
+                <th>Unit</th>
+                <th style={{ textAlign: 'right' }}>Qty</th>
+                <th style={{ textAlign: 'right' }}>Unit Price</th>
+                <th style={{ textAlign: 'right' }}>Line Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((line, i) => (
+                <tr key={line.line_id}>
+                  <td style={{ color: '#a0aec0', fontSize: '0.8rem' }}>{i + 1}</td>
+                  <td>{line.description}</td>
+                  <td>
+                    <span className={`${s.badge} ${s.badgeBlue}`}>{line.unit_code}</span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>{line.quantity}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {order.currency} {line.unit_price.toFixed(2)}
+                  </td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                    {order.currency} {(line.quantity * line.unit_price).toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td
+                  colSpan={5}
+                  style={{
+                    textAlign: 'right',
+                    fontWeight: 700,
+                    paddingTop: 14,
+                    borderTop: '2px solid #e8edf5',
+                    fontSize: '0.875rem',
+                    color: '#475569',
+                  }}
+                >
+                  Grand Total
+                </td>
+                <td
+                  style={{
+                    textAlign: 'right',
+                    fontWeight: 700,
+                    paddingTop: 14,
+                    borderTop: '2px solid #e8edf5',
+                    color: '#4361ee',
+                    fontSize: '1rem',
+                  }}
+                >
+                  {order.currency} {grandTotal.toFixed(2)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      ) : null}
+
+      {/* Recurrence (recurring orders only) */}
       {order.is_recurring && (
         <div className={s.card}>
           <p className={s.sectionHeading}>Recurrence</p>
