@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { fetchBuyerOrders, fetchSellerOrders } from '../api/parties';
-import { fetchOrders, Order } from '../api/orders';
+import { Order } from '../api/orders';
 import { useAuth } from '../context/AuthContext';
 
 interface UseMyOrdersResult {
@@ -11,15 +11,10 @@ interface UseMyOrdersResult {
 }
 
 /**
- * Returns orders for the logged-in user.
- *
- * Strategy (in order of preference):
- *  1. If externalId is set → try GET /parties/{role}/{externalId}/orders
- *  2. If that returns 404 (party not found yet) or the user has no externalId
- *     → fall back to GET /orders so the user always sees their data
- *
- * This handles the common case where the user created orders before setting up
- * their profile, or entered a different external_id in the order form.
+ * Returns only the orders belonging to the logged-in user.
+ * Fetches from GET /parties/{role}/{externalId}/orders.
+ * If the party endpoint returns 404 (no orders yet for this user) an empty
+ * list is shown — never falls back to the global order list.
  */
 export function useMyOrders(): UseMyOrdersResult {
   const { role, externalId } = useAuth();
@@ -35,12 +30,9 @@ export function useMyOrders(): UseMyOrdersResult {
     setLoading(true);
     setError(null);
 
-    // No externalId — user hasn't finished profile setup; show all orders
+    // No externalId yet (shouldn't happen after login, but guard anyway)
     if (!externalId) {
-      fetchOrders()
-        .then((data) => { if (!cancelled) setOrders(data); })
-        .catch((err: Error) => { if (!cancelled) setError(err.message); })
-        .finally(() => { if (!cancelled) setLoading(false); });
+      if (!cancelled) { setOrders([]); setLoading(false); }
       return () => { cancelled = true; };
     }
 
@@ -50,13 +42,10 @@ export function useMyOrders(): UseMyOrdersResult {
       .then((session) => {
         if (cancelled) return;
 
+        // null = 404 from party endpoint — user simply has no orders yet
         if (!session) {
-          // 404: this externalId has no orders yet, or the user created orders
-          // with a different external_id.  Fall back to GET /orders so the user
-          // isn't left staring at an empty list.
-          return fetchOrders().then((data) => {
-            if (!cancelled) setOrders(data);
-          });
+          setOrders([]);
+          return;
         }
 
         // Map PartyOrder → Order so every page can use a single type
