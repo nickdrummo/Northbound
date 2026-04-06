@@ -7,24 +7,22 @@ import s from '../styles/shared.module.css';
 const CURRENCIES = ['AUD', 'USD', 'GBP', 'EUR', 'NZD', 'CAD', 'SGD', 'JPY'];
 
 export default function Settings() {
-  const { userID, role, externalId, setProfile, logout } = useAuth();
+  const { userID, email, role, setRole, logout } = useAuth();
   const navigate = useNavigate();
   const { prefs, updatePreferences } = usePreferences();
 
-  const [profileRole, setProfileRole]     = useState<UserRole>(role ?? 'buyer');
-  const [profileEid, setProfileEid]       = useState(externalId ?? '');
-  const [profileSaved, setProfileSaved]   = useState(false);
+  const [pendingRole, setPendingRole] = useState<UserRole>(role ?? 'buyer');
+  const [roleSaved, setRoleSaved]     = useState(false);
 
   function handleLogout() {
     logout();
     navigate('/login');
   }
 
-  function handleSaveProfile() {
-    if (!profileEid.trim()) return;
-    setProfile(profileRole, profileEid.trim());
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 2500);
+  function handleSaveRole() {
+    setRole(pendingRole);
+    setRoleSaved(true);
+    setTimeout(() => setRoleSaved(false), 2500);
   }
 
   return (
@@ -45,6 +43,10 @@ export default function Settings() {
             <span className={s.mono}>{userID}</span>
           </div>
           <div className={s.detailItem}>
+            <span className={s.detailLabel}>Email</span>
+            <span className={s.detailValue}>{email ?? '—'}</span>
+          </div>
+          <div className={s.detailItem}>
             <span className={s.detailLabel}>Session</span>
             <span style={{ color: '#15803d', fontWeight: 600, fontSize: '0.875rem' }}>Active</span>
           </div>
@@ -56,67 +58,75 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Profile — role & externalId */}
+      {/* Party ID — read-only, derived from email */}
       <div className={s.card}>
-        <p className={s.sectionHeading}>Profile</p>
-        <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 18 }}>
-          Your role determines what you can do in Northbound. Your party ID links your account to orders.
+        <p className={s.sectionHeading}>Party Identity</p>
+        <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
+          Your party ID is automatically set to your email address and cannot be changed.
+          {role === 'seller' && (
+            <> Share it with buyers so they can reference you when placing orders.</>
+          )}
         </p>
-
-        {/* Role selector */}
-        <div className={s.formField} style={{ marginBottom: 16 }}>
-          <label>I am a…</label>
-          <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-            {(['buyer', 'seller'] as const).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => { setProfileRole(r); setProfileSaved(false); }}
-                style={{
-                  padding: '8px 20px',
-                  border: `2px solid ${profileRole === r ? '#4361ee' : '#e2e8f0'}`,
-                  borderRadius: 8,
-                  background: profileRole === r ? '#eff2fe' : '#fff',
-                  color: profileRole === r ? '#3451d1' : '#64748b',
-                  fontWeight: profileRole === r ? 700 : 500,
-                  fontSize: '0.875rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  textTransform: 'capitalize',
-                }}
-              >
-                {r}
-              </button>
-            ))}
+        <div className={s.detailGrid}>
+          <div className={s.detailItem}>
+            <span className={s.detailLabel}>Party ID (external_id)</span>
+            <span
+              className={s.mono}
+              style={{ color: '#4361ee', fontWeight: 600, fontSize: '0.875rem' }}
+            >
+              {email ?? '—'}
+            </span>
+          </div>
+          <div className={s.detailItem}>
+            <span className={s.detailLabel}>Role</span>
+            <span className={s.detailValue}>
+              {role ? (
+                <span className={`${s.badge} ${role === 'seller' ? s.badgePurple : s.badgeBlue}`}>
+                  {role.charAt(0).toUpperCase() + role.slice(1)}
+                </span>
+              ) : '—'}
+            </span>
           </div>
         </div>
+      </div>
 
-        {/* External ID field */}
-        <div className={s.formField} style={{ marginBottom: 18 }}>
-          <label>
-            {profileRole === 'seller' ? 'Seller ID (share with buyers)' : 'Buyer ID'}
-          </label>
-          <input
-            value={profileEid}
-            onChange={(e) => { setProfileEid(e.target.value); setProfileSaved(false); }}
-            placeholder={profileRole === 'seller' ? 'e.g. acme-supplies' : 'e.g. your@email.com'}
-            style={{ maxWidth: 360 }}
-          />
-          <p style={{ marginTop: 6, fontSize: '0.75rem', color: '#94a3b8' }}>
-            {profileRole === 'seller'
-              ? 'Buyers will enter this ID in the Seller section when creating orders. Once set, keep it consistent.'
-              : 'This ID will be pre-filled as your buyer external_id when creating new orders.'}
-          </p>
+      {/* Role selector */}
+      <div className={s.card}>
+        <p className={s.sectionHeading}>Role</p>
+        <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 18 }}>
+          Your role determines what you can do in Northbound. Buyers create orders; sellers receive and fulfil them.
+        </p>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
+          {(['buyer', 'seller'] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => { setPendingRole(r); setRoleSaved(false); }}
+              style={{
+                padding: '8px 20px',
+                border: `2px solid ${pendingRole === r ? '#4361ee' : '#e2e8f0'}`,
+                borderRadius: 8,
+                background: pendingRole === r ? '#eff2fe' : '#fff',
+                color: pendingRole === r ? '#3451d1' : '#64748b',
+                fontWeight: pendingRole === r ? 700 : 500,
+                fontSize: '0.875rem',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                textTransform: 'capitalize',
+              }}
+            >
+              {r}
+            </button>
+          ))}
         </div>
-
         <button
           className={s.btnPrimary}
-          onClick={handleSaveProfile}
-          disabled={!profileEid.trim()}
+          onClick={handleSaveRole}
+          disabled={pendingRole === role}
         >
-          Save Profile
+          Save Role
         </button>
-        {profileSaved && (
+        {roleSaved && (
           <span className={s.success} style={{ display: 'inline-block', marginLeft: 12, padding: '5px 12px' }}>
             Saved!
           </span>

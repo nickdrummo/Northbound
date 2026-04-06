@@ -4,23 +4,15 @@ import { useAuth, UserRole } from '../../context/AuthContext';
 import styles from './Auth.module.css';
 
 function Register() {
-  const { register, setProfile } = useAuth();
+  const { register, setRole } = useAuth();
   const navigate = useNavigate();
 
-  const [email, setEmail]                   = useState('');
-  const [password, setPassword]             = useState('');
+  const [email, setEmail]                     = useState('');
+  const [password, setPassword]               = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [role, setRole]                     = useState<UserRole>('buyer');
-  const [externalId, setExternalId]         = useState('');
-  const [error, setError]                   = useState<string | null>(null);
-  const [loading, setLoading]               = useState(false);
-
-  // Keep externalId in sync with email unless the user has manually edited it
-  const [eidManuallyEdited, setEidManuallyEdited] = useState(false);
-  function handleEmailChange(v: string) {
-    setEmail(v);
-    if (!eidManuallyEdited) setExternalId(v);
-  }
+  const [role, setRoleState]                  = useState<UserRole>('buyer');
+  const [error, setError]                     = useState<string | null>(null);
+  const [loading, setLoading]                 = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -34,16 +26,12 @@ function Register() {
       setError('Password must be at least 8 characters');
       return;
     }
-    if (!externalId.trim()) {
-      setError('Please enter your party ID');
-      return;
-    }
 
     setLoading(true);
     try {
       await register(email, password, passwordConfirm);
-      // Store role + externalId immediately after register (before navigate)
-      setProfile(role, externalId.trim());
+      // Role is stored immediately; externalId is derived from email automatically
+      setRole(role);
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
@@ -51,11 +39,6 @@ function Register() {
       setLoading(false);
     }
   }
-
-  const roleHint =
-    role === 'seller'
-      ? 'Buyers will enter this ID when placing orders with you. Share it with your buyers.'
-      : 'This ID links purchase orders to your account. It defaults to your email.';
 
   return (
     <div className={styles.wrapper}>
@@ -112,8 +95,11 @@ function Register() {
                 autoComplete="email"
                 placeholder="you@company.com"
                 value={email}
-                onChange={(e) => handleEmailChange(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
               />
+              <p className={styles.fieldHint}>
+                Your email is used as your unique party ID — it links your orders to your account.
+              </p>
             </div>
 
             <div className={styles.field}>
@@ -152,7 +138,7 @@ function Register() {
                 <button
                   type="button"
                   className={`${styles.roleCard} ${role === 'buyer' ? styles.roleCardActive : ''}`}
-                  onClick={() => setRole('buyer')}
+                  onClick={() => setRoleState('buyer')}
                 >
                   <span className={styles.roleIcon}>🛒</span>
                   <span className={styles.roleTitle}>Buyer</span>
@@ -161,33 +147,18 @@ function Register() {
                 <button
                   type="button"
                   className={`${styles.roleCard} ${role === 'seller' ? styles.roleCardActive : ''}`}
-                  onClick={() => setRole('seller')}
+                  onClick={() => setRoleState('seller')}
                 >
                   <span className={styles.roleIcon}>📦</span>
                   <span className={styles.roleTitle}>Seller</span>
                   <span className={styles.roleDesc}>I receive orders and fulfil them for buyers</span>
                 </button>
               </div>
-            </div>
-
-            {/* Party external ID */}
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="externalId">
-                {role === 'seller' ? 'Your Seller ID' : 'Your Buyer ID'}
-              </label>
-              <input
-                id="externalId"
-                className={styles.input}
-                type="text"
-                required
-                placeholder={role === 'seller' ? 'e.g. acme-supplies' : 'e.g. your@email.com'}
-                value={externalId}
-                onChange={(e) => {
-                  setExternalId(e.target.value);
-                  setEidManuallyEdited(true);
-                }}
-              />
-              <p className={styles.fieldHint}>{roleHint}</p>
+              {role === 'seller' && (
+                <p className={styles.fieldHint}>
+                  Share your email address with buyers so they can reference you when placing orders.
+                </p>
+              )}
             </div>
 
             <button className={styles.submitBtn} type="submit" disabled={loading}>
