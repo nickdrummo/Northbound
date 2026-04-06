@@ -1,17 +1,26 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, UserRole } from '../../context/AuthContext';
 import styles from './Auth.module.css';
 
 function Register() {
-  const { register } = useAuth();
+  const { register, setProfile } = useAuth();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail]                   = useState('');
+  const [password, setPassword]             = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [role, setRole]                     = useState<UserRole>('buyer');
+  const [externalId, setExternalId]         = useState('');
+  const [error, setError]                   = useState<string | null>(null);
+  const [loading, setLoading]               = useState(false);
+
+  // Keep externalId in sync with email unless the user has manually edited it
+  const [eidManuallyEdited, setEidManuallyEdited] = useState(false);
+  function handleEmailChange(v: string) {
+    setEmail(v);
+    if (!eidManuallyEdited) setExternalId(v);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -21,15 +30,20 @@ function Register() {
       setError('Passwords do not match');
       return;
     }
-
     if (password.length < 8) {
       setError('Password must be at least 8 characters');
+      return;
+    }
+    if (!externalId.trim()) {
+      setError('Please enter your party ID');
       return;
     }
 
     setLoading(true);
     try {
       await register(email, password, passwordConfirm);
+      // Store role + externalId immediately after register (before navigate)
+      setProfile(role, externalId.trim());
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
@@ -37,6 +51,11 @@ function Register() {
       setLoading(false);
     }
   }
+
+  const roleHint =
+    role === 'seller'
+      ? 'Buyers will enter this ID when placing orders with you. Share it with your buyers.'
+      : 'This ID links purchase orders to your account. It defaults to your email.';
 
   return (
     <div className={styles.wrapper}>
@@ -53,12 +72,12 @@ function Register() {
             <span className={styles.panelTaglineAccent}>minutes.</span>
           </p>
           <p className={styles.panelSubtext}>
-            Create your account and start issuing UBL-compliant purchase orders to your suppliers straight away.
+            Create your account and start managing UBL-compliant purchase orders straight away.
           </p>
           <div className={styles.panelFeatures}>
             <div className={styles.panelFeature}>
               <span className={styles.panelFeatureDot} />
-              No setup fees, no long-term contracts
+              Buyers issue orders — sellers receive and fulfil them
             </div>
             <div className={styles.panelFeature}>
               <span className={styles.panelFeatureDot} />
@@ -66,7 +85,7 @@ function Register() {
             </div>
             <div className={styles.panelFeature}>
               <span className={styles.panelFeatureDot} />
-              Automate recurring orders with flexible templates
+              Real-time currency conversion across major currencies
             </div>
           </div>
         </div>
@@ -93,7 +112,7 @@ function Register() {
                 autoComplete="email"
                 placeholder="you@company.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => handleEmailChange(e.target.value)}
               />
             </div>
 
@@ -124,6 +143,51 @@ function Register() {
                 value={passwordConfirm}
                 onChange={(e) => setPasswordConfirm(e.target.value)}
               />
+            </div>
+
+            {/* Role selector */}
+            <div className={styles.field}>
+              <label className={styles.label}>I am a…</label>
+              <div className={styles.roleGrid}>
+                <button
+                  type="button"
+                  className={`${styles.roleCard} ${role === 'buyer' ? styles.roleCardActive : ''}`}
+                  onClick={() => setRole('buyer')}
+                >
+                  <span className={styles.roleIcon}>🛒</span>
+                  <span className={styles.roleTitle}>Buyer</span>
+                  <span className={styles.roleDesc}>I create and send purchase orders to suppliers</span>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.roleCard} ${role === 'seller' ? styles.roleCardActive : ''}`}
+                  onClick={() => setRole('seller')}
+                >
+                  <span className={styles.roleIcon}>📦</span>
+                  <span className={styles.roleTitle}>Seller</span>
+                  <span className={styles.roleDesc}>I receive orders and fulfil them for buyers</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Party external ID */}
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="externalId">
+                {role === 'seller' ? 'Your Seller ID' : 'Your Buyer ID'}
+              </label>
+              <input
+                id="externalId"
+                className={styles.input}
+                type="text"
+                required
+                placeholder={role === 'seller' ? 'e.g. acme-supplies' : 'e.g. your@email.com'}
+                value={externalId}
+                onChange={(e) => {
+                  setExternalId(e.target.value);
+                  setEidManuallyEdited(true);
+                }}
+              />
+              <p className={styles.fieldHint}>{roleHint}</p>
             </div>
 
             <button className={styles.submitBtn} type="submit" disabled={loading}>

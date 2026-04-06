@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { createOrder, OrderInput, OrderLine, Party } from '../api/orders';
 import { getDefaultCurrency } from '../hooks/usePreferences';
 import s from '../styles/shared.module.css';
@@ -17,10 +18,10 @@ function cleanParty(p: Party): Party {
   return {
     external_id: p.external_id,
     name: p.name,
-    email: p.email?.trim() || undefined,
-    street: p.street?.trim() || undefined,
-    city: p.city?.trim() || undefined,
-    country: p.country?.trim() || undefined,
+    email:       p.email?.trim()       || undefined,
+    street:      p.street?.trim()      || undefined,
+    city:        p.city?.trim()        || undefined,
+    country:     p.country?.trim()     || undefined,
     postal_code: p.postal_code?.trim() || undefined,
   };
 }
@@ -72,16 +73,39 @@ function PartySection({ label, data, onChange }: PartySectionProps) {
 
 export default function CreateOrder() {
   const navigate = useNavigate();
+  const { role, externalId } = useAuth();
 
-  const [buyer, setBuyer] = useState<Party>({ ...EMPTY_PARTY });
-  const [seller, setSeller] = useState<Party>({ ...EMPTY_PARTY });
+  // Pre-fill buyer with logged-in user's externalId if they are a buyer
+  const defaultBuyer: Party = {
+    ...EMPTY_PARTY,
+    external_id: (role === 'buyer' && externalId) ? externalId : '',
+  };
+
+  const [buyer, setBuyer]     = useState<Party>(defaultBuyer);
+  const [seller, setSeller]   = useState<Party>({ ...EMPTY_PARTY });
   const [currency, setCurrency] = useState(getDefaultCurrency);
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
-  const [note, setNote] = useState('');
-  const [lines, setLines] = useState<Omit<OrderLine, 'line_id'>[]>([{ ...EMPTY_LINE }]);
+  const [note, setNote]       = useState('');
+  const [lines, setLines]     = useState<Omit<OrderLine, 'line_id'>[]>([{ ...EMPTY_LINE }]);
 
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]           = useState<string | null>(null);
+
+  // Sellers shouldn't be creating orders
+  if (role === 'seller') {
+    return (
+      <div className={s.page}>
+        <div className={s.pageHeader}>
+          <h1 className={s.pageTitle}>New Order</h1>
+        </div>
+        <div className={s.card}>
+          <p style={{ color: '#64748b', fontSize: '0.9rem' }}>
+            Only buyers can create orders. Your account is registered as a <strong>seller</strong>.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   function updateBuyer(field: keyof Party, value: string) {
     setBuyer((prev) => ({ ...prev, [field]: value }));
@@ -115,8 +139,8 @@ export default function CreateOrder() {
       order_note: note || undefined,
       order_lines: lines.map((l, i) => ({
         ...l,
-        line_id: `line-${i + 1}`,
-        quantity: Number(l.quantity),
+        line_id:    `line-${i + 1}`,
+        quantity:   Number(l.quantity),
         unit_price: Number(l.unit_price),
       })),
     };
@@ -153,7 +177,7 @@ export default function CreateOrder() {
           <div className={s.formField}>
             <label className={s.required}>Currency</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
-              {['AUD', 'USD', 'GBP', 'EUR', 'NZD'].map((c) => (
+              {['AUD', 'USD', 'GBP', 'EUR', 'NZD', 'CAD', 'SGD', 'JPY'].map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>

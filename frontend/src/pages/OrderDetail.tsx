@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useOrder } from '../hooks/useOrder';
+import { useAuth } from '../context/AuthContext';
+import { useOrderStatus, OrderStatus } from '../hooks/useOrderStatus';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 import {
   cancelOrder,
   updatePartyCountry,
@@ -40,36 +43,57 @@ const COUNTRIES: { code: string; name: string }[] = [
   { code: 'AE', name: 'UAE' },
 ];
 
+const DISPLAY_CURRENCIES = ['AUD', 'USD', 'GBP', 'EUR', 'NZD', 'CAD', 'SGD', 'JPY', 'CNY', 'INR'];
+
+const STATUS_LABELS: Record<OrderStatus, string> = {
+  pending:   'Pending',
+  shipped:   'Shipped',
+  delivered: 'Delivered',
+};
+
+const STATUS_BADGE: Record<OrderStatus, string> = {
+  pending:   s.badgeYellow,
+  shipped:   s.badgeBlue,
+  delivered: s.badgeGreen,
+};
+
 export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { role } = useAuth();
   const { order, loading, error } = useOrder(id!);
+  const { getStatus, updateStatus } = useOrderStatus();
+  const { loading: ratesLoading, convert } = useExchangeRates();
 
   const [showConfirm, setShowConfirm] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
+  const [cancelling, setCancelling]   = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
   // Parsed order details from XML (lines + party names)
-  const [details, setDetails] = useState<ParsedOrderDetails | null>(null);
+  const [details, setDetails]           = useState<ParsedOrderDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
 
   // Party update state — stores full Party objects returned by PATCH
   const [updatedParties, setUpdatedParties] = useState<{ buyer: Party; seller: Party } | null>(null);
 
   // Party country edit state
-  const [countryRole, setCountryRole] = useState<'buyer' | 'seller'>('buyer');
-  const [countryCode, setCountryCode] = useState('AU');
+  const [countryRole, setCountryRole]   = useState<'buyer' | 'seller'>('buyer');
+  const [countryCode, setCountryCode]   = useState('AU');
   const [countrySubmitting, setCountrySubmitting] = useState(false);
   const [countryError, setCountryError] = useState<string | null>(null);
   const [countrySuccess, setCountrySuccess] = useState(false);
+
+  // Currency conversion display
+  const [displayCurrency, setDisplayCurrency] = useState<string | null>(null);
 
   // Fetch XML-based details (party names + order lines) once order is known
   useEffect(() => {
     if (!order) return;
     setDetailsLoading(true);
+    setDisplayCurrency(order.currency); // default to order's own currency
     fetchOrderDetails(order.id)
       .then(setDetails)
-      .catch(() => { /* non-fatal — XML endpoint may not exist yet */ })
+      .catch(() => { /* non-fatal */ })
       .finally(() => setDetailsLoading(false));
   }, [order]);
 
@@ -96,20 +120,18 @@ export default function OrderDetail() {
     setCountrySuccess(false);
     try {
       const result = await updatePartyCountry(order.id, countryRole, countryCode);
-      // Store updated party objects so the UI reflects the change immediately
       setUpdatedParties({ buyer: result.buyer, seller: result.seller });
-      // Also refresh order lines from the response if present
       if (result.order_lines?.length) {
         setDetails((prev) =>
           prev
             ? {
                 ...prev,
                 order_lines: result.order_lines.map((l) => ({
-                  line_id: l.line_id,
+                  line_id:     l.line_id,
                   description: l.description,
-                  quantity: l.quantity,
-                  unit_price: l.unit_price,
-                  unit_code: l.unit_code ?? 'EA',
+                  quantity:    l.quantity,
+                  unit_price:  l.unit_price,
+                  unit_code:   l.unit_code ?? 'EA',
                 })),
               }
             : prev,
@@ -126,16 +148,24 @@ export default function OrderDetail() {
   if (loading) return <div className={s.page}><p className={s.loadingCell}>Loading order…</p></div>;
   if (error || !order) return <div className={s.page}><p className={s.error}>{error ?? 'Order not found.'}</p></div>;
 
-  // Prefer data from PATCH response (reflects latest save), fall back to XML parse
-  const buyerName    = updatedParties?.buyer.name    ?? details?.buyerName  ?? '';
-  const buyerCountry = updatedParties?.buyer.country ?? '';
-  const sellerName   = updatedParties?.seller.name   ?? details?.sellerName ?? '';
+  const buyerName     = updatedParties?.buyer.name    ?? details?.buyerName  ?? '';
+  const buyerCountry  = updatedParties?.buyer.country ?? '';
+  const sellerName    = updatedParties?.seller.name   ?? details?.sellerName ?? '';
   const sellerCountry = updatedParties?.seller.country ?? '';
 
-  const lines = details?.order_lines ?? [];
-  const grandTotal = lines.reduce((sum, l) => sum + l.quantity * l.unit_price, 0);
+  const lines      = details?.order_lines ?? [];
+  const toCurrency = displayCurrency ?? order.currency;
+  const isSameCurrency = toCurrency === order.currency;
 
-  // Country label for success message
+  // Grand total in display currency
+  const grandTotal = lines.reduce(
+    (sum, l) => sum + convert(l.quantity * l.unit_price, order.currency, toCurrency),
+    0,
+  );
+
+  const orderStatus = getStatus(order.id);
+  const isSeller    = role === 'seller';
+
   const updatedCountryName =
     COUNTRIES.find((c) => c.code === countryCode)?.name ?? countryCode;
 
@@ -146,7 +176,13 @@ export default function OrderDetail() {
           <button className={s.backLink} onClick={() => navigate('/orders')}>← Back to Orders</button>
           <h1 className={s.pageTitle} style={{ marginTop: 6 }}>Order Detail</h1>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {/* Order status badge */}
+          {!order.is_recurring && (
+            <span className={`${s.badge} ${STATUS_BADGE[orderStatus]}`}>
+              {STATUS_LABELS[orderStatus]}
+            </span>
+          )}
           <a
             href={`${API_URL}/orders/${order.id}/xml`}
             target="_blank"
@@ -156,13 +192,50 @@ export default function OrderDetail() {
           >
             ↓ Download XML
           </a>
-          {!order.is_recurring && (
+          {!order.is_recurring && role !== 'seller' && (
             <button className={s.btnDanger} onClick={() => setShowConfirm(true)}>
               Cancel Order
             </button>
           )}
         </div>
       </div>
+
+      {/* Seller: order fulfilment actions */}
+      {isSeller && !order.is_recurring && (
+        <div className={s.card}>
+          <p className={s.sectionHeading}>Order Fulfilment</p>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.875rem', color: '#64748b' }}>
+              Current status:{' '}
+              <span className={`${s.badge} ${STATUS_BADGE[orderStatus]}`}>
+                {STATUS_LABELS[orderStatus]}
+              </span>
+            </span>
+            {orderStatus === 'pending' && (
+              <button
+                className={s.btnPrimary}
+                onClick={() => updateStatus(order.id, 'shipped')}
+              >
+                Mark as Shipped
+              </button>
+            )}
+            {orderStatus === 'shipped' && (
+              <button
+                className={s.btnSecondary}
+                style={{ color: '#15803d', borderColor: '#bbf7d0' }}
+                onClick={() => updateStatus(order.id, 'delivered')}
+              >
+                Mark as Delivered
+              </button>
+            )}
+            {orderStatus === 'delivered' && (
+              <span style={{ fontSize: '0.875rem', color: '#15803d', fontWeight: 600 }}>
+                ✓ Order complete
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Order Information */}
       <div className={s.card}>
@@ -272,14 +345,35 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      {/* Order Lines */}
+      {/* Order Lines + Currency Conversion */}
       {detailsLoading ? (
-        <div className={s.card}>
-          <p className={s.loadingCell}>Loading order lines…</p>
-        </div>
+        <div className={s.card}><p className={s.loadingCell}>Loading order lines…</p></div>
       ) : lines.length > 0 ? (
         <div className={s.card}>
-          <p className={s.sectionHeading}>Order Lines</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <p className={s.sectionHeading} style={{ margin: 0, borderBottom: 'none', padding: 0 }}>Order Lines</p>
+            {/* Currency conversion selector */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={{ fontSize: '0.78rem', color: '#64748b', whiteSpace: 'nowrap' }}>
+                View in:
+              </label>
+              <select
+                value={toCurrency}
+                onChange={(e) => setDisplayCurrency(e.target.value)}
+                style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: '0.82rem', color: '#0f172a' }}
+              >
+                {DISPLAY_CURRENCIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              {ratesLoading && <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Loading rates…</span>}
+            </div>
+          </div>
+          {!isSameCurrency && (
+            <p style={{ fontSize: '0.78rem', color: '#4361ee', marginBottom: 12, background: '#eff2fe', padding: '7px 12px', borderRadius: 6 }}>
+              Amounts are converted from <strong>{order.currency}</strong> to <strong>{toCurrency}</strong> using live exchange rates. Original currency is {order.currency}.
+            </p>
+          )}
           <table className={s.table}>
             <thead>
               <tr>
@@ -292,49 +386,42 @@ export default function OrderDetail() {
               </tr>
             </thead>
             <tbody>
-              {lines.map((line, i) => (
-                <tr key={line.line_id}>
-                  <td style={{ color: '#a0aec0', fontSize: '0.8rem' }}>{i + 1}</td>
-                  <td>{line.description}</td>
-                  <td>
-                    <span className={`${s.badge} ${s.badgeBlue}`}>{line.unit_code}</span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>{line.quantity}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    {order.currency} {line.unit_price.toFixed(2)}
-                  </td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                    {order.currency} {(line.quantity * line.unit_price).toFixed(2)}
-                  </td>
-                </tr>
-              ))}
+              {lines.map((line, i) => {
+                const unitPriceConverted  = convert(line.unit_price,               order.currency, toCurrency);
+                const lineTotalConverted  = convert(line.quantity * line.unit_price, order.currency, toCurrency);
+                return (
+                  <tr key={line.line_id}>
+                    <td style={{ color: '#a0aec0', fontSize: '0.8rem' }}>{i + 1}</td>
+                    <td>{line.description}</td>
+                    <td><span className={`${s.badge} ${s.badgeBlue}`}>{line.unit_code}</span></td>
+                    <td style={{ textAlign: 'right' }}>{line.quantity}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      {toCurrency} {unitPriceConverted.toFixed(2)}
+                      {!isSameCurrency && (
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#94a3b8' }}>
+                          {order.currency} {line.unit_price.toFixed(2)}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                      {toCurrency} {lineTotalConverted.toFixed(2)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr>
                 <td
                   colSpan={5}
-                  style={{
-                    textAlign: 'right',
-                    fontWeight: 700,
-                    paddingTop: 14,
-                    borderTop: '2px solid #e8edf5',
-                    fontSize: '0.875rem',
-                    color: '#475569',
-                  }}
+                  style={{ textAlign: 'right', fontWeight: 700, paddingTop: 14, borderTop: '2px solid #e8edf5', fontSize: '0.875rem', color: '#475569' }}
                 >
-                  Grand Total
+                  Grand Total{!isSameCurrency ? ` (${toCurrency})` : ''}
                 </td>
                 <td
-                  style={{
-                    textAlign: 'right',
-                    fontWeight: 700,
-                    paddingTop: 14,
-                    borderTop: '2px solid #e8edf5',
-                    color: '#4361ee',
-                    fontSize: '1rem',
-                  }}
+                  style={{ textAlign: 'right', fontWeight: 700, paddingTop: 14, borderTop: '2px solid #e8edf5', color: '#4361ee', fontSize: '1rem' }}
                 >
-                  {order.currency} {grandTotal.toFixed(2)}
+                  {toCurrency} {grandTotal.toFixed(2)}
                 </td>
               </tr>
             </tfoot>

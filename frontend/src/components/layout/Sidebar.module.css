@@ -56,3 +56,23 @@
   color: #3451d1;
   font-weight: 600;
 }
+
+.roleBadge {
+  margin-top: auto;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: capitalize;
+}
+
+.roleDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4361ee;
+  flex-shrink: 0;
+}
