@@ -104,6 +104,44 @@ export async function createOrder(input: OrderInput): Promise<{ orderID: string 
   return json.data;
 }
 
+/** Full replacement update — same body shape as createOrder. */
+export async function updateOrder(id: string, input: OrderInput): Promise<{ orderID: string }> {
+  const res = await fetch(`${API_URL}/orders/${id}/change`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const detail = err?.error?.validationErrors?.map((e: { field: string; message: string }) => e.message).join(', ');
+    throw new Error(detail ?? err?.error?.message ?? err?.message ?? `Failed to update order: ${res.status}`);
+  }
+  const json: ApiResponse<{ orderID: string }> = await res.json();
+  return json.data;
+}
+
+export interface OrderDetailPatch {
+  currency?: string;
+  issue_date?: string;
+  order_note?: string | null;
+}
+
+/** Partial update — only currency, issue_date, and/or order_note. */
+export async function patchOrderDetail(id: string, patch: OrderDetailPatch): Promise<Order> {
+  const res = await fetch(`${API_URL}/orders/${id}/detail`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const detail = err?.error?.validationErrors?.map((e: { field: string; message: string }) => e.message).join(', ');
+    throw new Error(detail ?? err?.error?.message ?? err?.message ?? `Failed to patch order: ${res.status}`);
+  }
+  const json: ApiResponse<Order> = await res.json();
+  return json.data;
+}
+
 /**
  * Fetch the UBL XML for an order and parse it into structured data:
  * buyer/seller names and all order lines with quantities and prices.

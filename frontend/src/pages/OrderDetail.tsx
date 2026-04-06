@@ -245,6 +245,11 @@ export default function OrderDetail() {
           >
             ↓ Download XML
           </a>
+          {role !== 'seller' && (
+            <button className={s.btnSecondary} onClick={() => navigate(`/orders/${order.id}/edit`)}>
+              Edit Order
+            </button>
+          )}
           {!order.is_recurring && role !== 'seller' && (
             <button className={s.btnDanger} onClick={() => setShowConfirm(true)}>
               Cancel Order
