@@ -1,6 +1,15 @@
-import { OrderInput, Party, OrderLine, RecurringOrderInput, RecurringOrderUpdate, RecurringOrder } from "./order.types"; 
+import {
+    OrderInput,
+    Party,
+    OrderLine,
+    RecurringOrderInput,
+    RecurringOrderUpdate,
+    RecurringOrder,
+    OrderDetailPatch,
+    OrderResponseInput,
+} from "./order.types";
 import { createClient } from '@supabase/supabase-js';
-import { generateUBL } from './ubl.service';
+import { generateUBL, generateOrderResponseUBL } from './ubl.service';
 import { AppError } from '../errors';
 import dotenv from 'dotenv';
 
@@ -112,7 +121,7 @@ export async function retrieveOrderByID(orderID: string) {
 
 /**
  * Replace an existing order with a new full payload (parties, header, lines), regenerate UBL.
- * Used by PUT /v2/orders/:id/change — keeps the same order id.
+ * Used by PUT /orders/:id/change (and `/v1/orders/...`) — keeps the same order id.
  */
 export async function updateOrderWithFullPayload(
     orderID: string,
@@ -216,7 +225,7 @@ export async function updateOrderWithFullPayload(
 
 /**
  * Cancel (delete) an existing order.
- * Used by POST /v2/orders/:id/cancel.
+ * Used by POST /orders/:id/cancel (and `/v1/orders/...`).
  */
 export async function cancelOrder(orderID: string): Promise<{ orderID: string }> {
     const supabase = getSupabase();
@@ -560,6 +569,177 @@ export async function updateOrderPartyCountry(
     ubl_xml: result.ubl_xml,
   };
 
+}
+
+/**
+ * Partial update of header fields on a **non-recurring** order; regenerates UBL Order XML.
+ * Recurring templates must use PATCH /orders/recurring/:id.
+ */
+export async function patchOrderDetail(
+    orderID: string,
+    patch: OrderDetailPatch
+): Promise<{
+    orderID: string;
+    currency: string;
+    issue_date: string;
+    order_note: string | null;
+    ubl_xml: string;
+} | null> {
+    const supabase = getSupabase();
+
+    const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderID)
+        .single();
+
+    if (orderError || !order) {
+        return null;
+    }
+
+    if (order.is_recurring === true) {
+        throw new AppError(
+            'USE_RECURRING_PATCH',
+            'Recurring orders must be updated with PATCH /orders/recurring/{id}.',
+            400
+        );
+    }
+
+    const orderFields: Record<string, unknown> = {};
+    if (patch.currency !== undefined) {
+        orderFields.currency = patch.currency;
+    }
+    if (patch.issue_date !== undefined) {
+        orderFields.issue_date = patch.issue_date;
+    }
+    if (patch.order_note !== undefined) {
+        orderFields.order_note =
+            patch.order_note === '' || patch.order_note === null ? null : patch.order_note;
+    }
+
+    if (Object.keys(orderFields).length === 0) {
+        throw new AppError('VALIDATION_ERROR', 'No valid fields to update.', 400);
+    }
+
+    const { error: updateErr } = await supabase
+        .from('orders')
+        .update(orderFields)
+        .eq('id', orderID);
+
+    if (updateErr) {
+        throw new Error(`Failed to update order: ${updateErr.message}`);
+    }
+
+    const { data: refreshed, error: refetchErr } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderID)
+        .single();
+
+    if (refetchErr || !refreshed) {
+        throw new Error('Failed to retrieve order after update');
+    }
+
+    const { data: buyer, error: buyerError } = await supabase
+        .from('parties')
+        .select('*')
+        .eq('id', refreshed.buyer_id)
+        .single();
+
+    if (buyerError || !buyer) {
+        throw new Error('Buyer not found');
+    }
+
+    const { data: seller, error: sellerError } = await supabase
+        .from('parties')
+        .select('*')
+        .eq('id', refreshed.seller_id)
+        .single();
+
+    if (sellerError || !seller) {
+        throw new Error('Seller not found');
+    }
+
+    const { data: lines, error: linesError } = await supabase
+        .from('order_lines')
+        .select('*')
+        .eq('order_id', orderID);
+
+    if (linesError) {
+        throw new Error(`Failed to retrieve order lines: ${linesError.message}`);
+    }
+
+    const rebuiltOrderInput: OrderInput = {
+        buyer: {
+            external_id: buyer.external_id,
+            name: buyer.name,
+            email: buyer.email,
+            street: buyer.street,
+            city: buyer.city,
+            country: buyer.country,
+            postal_code: buyer.postal_code,
+        },
+        seller: {
+            external_id: seller.external_id,
+            name: seller.name,
+            email: seller.email,
+            street: seller.street,
+            city: seller.city,
+            country: seller.country,
+            postal_code: seller.postal_code,
+        },
+        currency: refreshed.currency,
+        issue_date: refreshed.issue_date,
+        order_note: refreshed.order_note,
+        order_lines: (lines ?? []).map((line: any) => ({
+            line_id: line.line_id,
+            description: line.description,
+            quantity: line.quantity,
+            unit_price: line.unit_price,
+            unit_code: line.unit_code,
+        })),
+    };
+
+    const result = generateUBL(rebuiltOrderInput, refreshed.id);
+
+    return {
+        orderID: refreshed.id,
+        currency: refreshed.currency,
+        issue_date: refreshed.issue_date,
+        order_note: refreshed.order_note,
+        ubl_xml: result.ubl_xml,
+    };
+}
+
+/** Build a UBL OrderResponse document for an existing stored order (any order row). */
+export async function generateOrderResponseForOrder(
+    orderID: string,
+    input: OrderResponseInput
+): Promise<{ orderID: string; responseID: string; ubl_xml: string } | null> {
+    const existing = await retrieveOrderByID(orderID);
+    if (!existing) {
+        return null;
+    }
+
+    const issueDate =
+        input.issue_date ?? new Date().toISOString().slice(0, 10);
+
+    const ublParams: {
+        referencedOrderID: string;
+        responseCode: string;
+        issueDate: string;
+        note?: string;
+    } = {
+        referencedOrderID: orderID,
+        responseCode: input.response_code,
+        issueDate,
+    };
+    if (input.note !== undefined) {
+        ublParams.note = input.note;
+    }
+    const { responseID, ubl_xml } = generateOrderResponseUBL(ublParams);
+
+    return { orderID, responseID, ubl_xml };
 }
 
 /**

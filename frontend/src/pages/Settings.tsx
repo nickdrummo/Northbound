@@ -64,8 +64,8 @@ export default function Settings() {
             {import.meta.env.VITE_API_URL ?? 'http://localhost:3001'}
           </span>
 
-          <span className={s.detailLabel}>Version</span>
-          <span>v1 / v2</span>
+          <span className={s.detailLabel}>Order routes</span>
+          <span>/orders (alias /v1/orders)</span>
         </div>
       </div>
     </div>

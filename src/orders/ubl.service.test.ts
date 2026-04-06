@@ -1,4 +1,4 @@
-import { generateUBL } from './ubl.service';
+import { generateUBL, generateOrderResponseUBL } from './ubl.service';
 
 const validInput = {
   buyer: { external_id: 'buyer-ext-1', name: 'Buyer Co', email: 'buyer@example.com', city: 'Sydney', country: 'AU' },
@@ -43,5 +43,23 @@ describe('generateUBL', () => {
   it('calculates line extension amount correctly', () => {
     const { ubl_xml } = generateUBL(validInput);
     expect(ubl_xml).toContain('100'); // 2 * 50
+  });
+});
+
+describe('generateOrderResponseUBL', () => {
+  it('returns XML referencing the order and response code', () => {
+    const { responseID, ubl_xml } = generateOrderResponseUBL({
+      referencedOrderID: '00000000-0000-4000-8000-000000000001',
+      responseCode: 'ACCEPTED',
+      issueDate: '2024-06-15',
+      note: 'Thanks',
+    });
+    expect(ubl_xml).toContain('<?xml version="1.0"');
+    expect(ubl_xml).toContain('OrderResponse');
+    expect(ubl_xml).toContain('00000000-0000-4000-8000-000000000001');
+    expect(ubl_xml).toContain('ACCEPTED');
+    expect(responseID).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    );
   });
 });

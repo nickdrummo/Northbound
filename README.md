@@ -26,7 +26,7 @@ Northbound provides:
 
 - **Authentication** — User registration and login (JWT).
 - **Health check** — Service status and uptime.
-- **Orders** — Create orders, list them, retrieve UBL XML, **replace** an existing order (full payload) via **`PUT /v2/orders/:id/change`**, and **cancel** an order via **`POST /v2/orders/:id/cancel`**.
+- **Orders** — Create orders, list them, retrieve UBL XML, **replace** an order (full payload) via **`PUT /orders/:id/change`** (or `/v1/orders/...`), **cancel** via **`POST /orders/:id/cancel`**, update **buyer/seller country** via **`PATCH /orders/:id/party-country`**, and manage **recurring** templates under **`/orders/recurring`**.
 - **API documentation** — Interactive Swagger UI at `/docs`, backed by **OpenAPI 3** (`openapi.yaml`).
 
 The API uses a **standard JSON response envelope** for success and error responses so integrating clients can handle them consistently.
@@ -120,16 +120,23 @@ Base URL when running locally: **`http://localhost:3000`**. Deployed example: **
 | **POST** | `/orders` or `/v1/orders/generate` | Create an order and generate UBL XML. Body: see [Order request body](#order-request-body) below. |
 | **GET** | `/orders/:id` or `/v1/orders/:id` | Retrieve one order by ID (JSON). |
 | **GET** | `/orders/:id/xml` or `/v1/orders/:id/xml` | Retrieve the UBL Order XML for order `id`. Returns `application/xml`. |
-| **PUT** | `/v2/orders/:id/change` | **Order change (Sprint 3).** Replace the order with a full new payload (same shape as create); same `id`; returns updated UBL XML. Requires Supabase env vars. |
-| **PUT** | `/orders/:id/change` or `/v1/orders/:id/change` | **Not implemented on v1** — returns **501** with code `ORDER_CHANGE_USE_V2`; use **`PUT /v2/orders/:id/change`** instead. |
-| **POST** | `/v2/orders/:id/cancel` | **Order cancel (Sprint 3).** Deletes the order and its order lines; returns `orderID`. Requires Supabase env vars. |
-| **POST** | `/orders/:id/cancel` or `/v1/orders/:id/cancel` | **Not implemented on v1** — returns **501** with code `ORDER_CANCEL_USE_V2`; use **`POST /v2/orders/:id/cancel`** instead. |
+| **PATCH** | `/orders/:id/party-country` or `/v1/orders/:id/party-country` | Update buyer or seller **country** (ISO code); returns regenerated UBL XML. Requires Supabase. |
+| **PATCH** | `/orders/:id/detail` or `/v1/orders/:id/detail` | Patch header fields (`currency`, `issue_date`, `order_note`) on a **non-recurring** order; returns regenerated UBL Order XML. Requires Supabase. |
+| **POST** | `/orders/:id/response` or `/v1/orders/:id/response` | Body: `response_code` (required), optional `issue_date`, `note`. Returns UBL **OrderResponse** XML for an existing order (not stored). Requires Supabase. |
+| **PUT** | `/orders/:id/change` or `/v1/orders/:id/change` | Replace the order with a **full** new payload (same shape as create); same `id`; returns updated UBL XML. Requires Supabase. |
+| **POST** | `/orders/:id/cancel` or `/v1/orders/:id/cancel` | Cancel (delete) the order and its line items; returns `orderID`. Requires Supabase. |
+| **POST** | `/orders/recurring` or `/v1/orders/recurring` | Create a recurring order template. |
+| **PATCH** | `/orders/recurring/:id` or `/v1/orders/recurring/:id` | Partial update of a recurring order (optional fields include `currency`, schedule, parties, `order_lines`). |
+| **DELETE** | `/orders/recurring/:id` or `/v1/orders/recurring/:id` | Delete a recurring order template. |
+| **POST** | `/auth/forgot-password` | Request a password reset (email in body). |
+| **POST** | `/auth/reset-password` | Complete reset with `token` and `newPassword`. |
+| **POST** | `/auth/logout` | Revoke JWT (`Authorization: Bearer …`). |
 
 For full request/response schemas and examples, use **Swagger UI** at **`GET /docs`** after starting the server (spec: OpenAPI 3.0).
 
 ### Order request body
 
-Create-order and **change-order** requests use this JSON shape (e.g. `POST /orders`, `POST /v1/orders/generate`, or **`PUT /v2/orders/{id}/change`**):
+Create-order and **change-order** requests use this JSON shape (e.g. `POST /orders`, `POST /v1/orders/generate`, or **`PUT /orders/{id}/change`**):
 
 ```json
 {
@@ -219,7 +226,7 @@ Northbound/
 └── .env                    # Not committed; copy from .env.example
 ```
 
-- **Other teams:** Use the same base URL (e.g. deployed `https://northbound-w6b3.onrender.com` or local `http://localhost:3000`). Use `/auth/login` or `/auth/register` for a token; send `Authorization: Bearer <token>` when required. Use `POST /orders` or `POST /v1/orders/generate` to create orders; use **`PUT /v2/orders/{orderID}/change`** to replace an order (full body); use **`POST /v2/orders/{orderID}/cancel`** to cancel an order. See [Order request body](#order-request-body) or Swagger UI at `/docs`.
+- **Other teams:** Use the same base URL (e.g. deployed `https://northbound-w6b3.onrender.com` or local `http://localhost:3000`). Use `/auth/login` or `/auth/register` for a token; send `Authorization: Bearer <token>` when required. Use `POST /orders` or `POST /v1/orders/generate` to create orders; use **`PUT /orders/{orderID}/change`** to replace an order (full body); use **`POST /orders/{orderID}/cancel`** to cancel. See [Order request body](#order-request-body) or Swagger UI at `/docs`.
 
 ---
 
