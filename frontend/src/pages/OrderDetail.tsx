@@ -11,7 +11,6 @@ import {
   ParsedOrderDetails,
   Party,
 } from '../api/orders';
-import { createDespatch, getDespatch, CreateDespatchResult } from '../api/despatch';
 import s from '../styles/shared.module.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
@@ -87,13 +86,6 @@ export default function OrderDetail() {
   // Currency conversion display
   const [displayCurrency, setDisplayCurrency] = useState<string | null>(null);
 
-  // Despatch advice state
-  const [despatchResult, setDespatchResult]   = useState<CreateDespatchResult | null>(null);
-  const [despatchXml, setDespatchXml]         = useState<string | null>(null);
-  const [despatchLoading, setDespatchLoading] = useState(false);
-  const [despatchError, setDespatchError]     = useState<string | null>(null);
-  const [showDespatchXml, setShowDespatchXml] = useState(false);
-
   // Fetch XML-based details (party names + order lines) once order is known
   useEffect(() => {
     if (!order) return;
@@ -150,49 +142,6 @@ export default function OrderDetail() {
       setCountryError(err instanceof Error ? err.message : 'Failed to update country');
     } finally {
       setCountrySubmitting(false);
-    }
-  }
-
-  async function handleCreateDespatch() {
-    if (!order) return;
-    setDespatchLoading(true);
-    setDespatchError(null);
-    try {
-      const result = await createDespatch(order.id);
-      setDespatchResult(result);
-      // Advance status to shipped once despatch advice is created
-      updateStatus(order.id, 'shipped');
-      // Immediately try to retrieve the despatch XML if we got an advice ID
-      if (result.adviceIds.length > 0) {
-        try {
-          const retrieved = await getDespatch(order.id, result.adviceIds[0]);
-          if (retrieved['despatch-advice']) setDespatchXml(retrieved['despatch-advice']);
-        } catch {
-          // Non-fatal — advice was created, retrieval can be retried
-        }
-      }
-    } catch (err) {
-      setDespatchError(err instanceof Error ? err.message : 'Failed to create despatch advice');
-    } finally {
-      setDespatchLoading(false);
-    }
-  }
-
-  async function handleRetrieveDespatch() {
-    if (!order) return;
-    setDespatchLoading(true);
-    setDespatchError(null);
-    try {
-      const adviceId = despatchResult?.adviceIds[0];
-      const retrieved = await getDespatch(order.id, adviceId);
-      if (retrieved['despatch-advice']) setDespatchXml(retrieved['despatch-advice']);
-      if (retrieved['advice-id'] && !despatchResult) {
-        setDespatchResult({ success: true, adviceIds: [retrieved['advice-id']] });
-      }
-    } catch (err) {
-      setDespatchError(err instanceof Error ? err.message : 'Failed to retrieve despatch advice');
-    } finally {
-      setDespatchLoading(false);
     }
   }
 
@@ -262,7 +211,7 @@ export default function OrderDetail() {
       {isSeller && !order.is_recurring && (
         <div className={s.card}>
           <p className={s.sectionHeading}>Order Fulfilment</p>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: despatchError ? 10 : 0 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.875rem', color: '#64748b' }}>
               Current status:{' '}
               <span className={`${s.badge} ${STATUS_BADGE[orderStatus]}`}>
@@ -272,19 +221,9 @@ export default function OrderDetail() {
             {orderStatus === 'pending' && (
               <button
                 className={s.btnPrimary}
-                disabled={despatchLoading}
-                onClick={handleCreateDespatch}
+                onClick={() => updateStatus(order.id, 'shipped')}
               >
-                {despatchLoading ? 'Creating…' : 'Create Despatch Advice'}
-              </button>
-            )}
-            {orderStatus === 'shipped' && !despatchResult && (
-              <button
-                className={s.btnSecondary}
-                disabled={despatchLoading}
-                onClick={handleRetrieveDespatch}
-              >
-                {despatchLoading ? 'Retrieving…' : 'View Despatch Advice'}
+                Mark as Shipped
               </button>
             )}
             {orderStatus === 'shipped' && (
@@ -302,54 +241,6 @@ export default function OrderDetail() {
               </span>
             )}
           </div>
-
-          {despatchError && (
-            <p className={s.error} style={{ marginTop: 10 }}>{despatchError}</p>
-          )}
-
-          {/* Despatch advice details */}
-          {despatchResult && (
-            <div style={{ marginTop: 16, padding: '12px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8 }}>
-              <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#15803d', marginBottom: 8 }}>
-                ✓ Despatch Advice Created
-              </p>
-              {despatchResult.adviceIds.map((id) => (
-                <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Advice ID:</span>
-                  <code style={{ fontSize: '0.78rem', background: '#e2e8f0', padding: '2px 6px', borderRadius: 4 }}>{id}</code>
-                </div>
-              ))}
-              {despatchXml ? (
-                <div style={{ marginTop: 10 }}>
-                  <button
-                    className={s.btnSecondary}
-                    style={{ padding: '4px 10px', fontSize: '0.78rem' }}
-                    onClick={() => setShowDespatchXml((v) => !v)}
-                  >
-                    {showDespatchXml ? 'Hide XML' : 'View Despatch XML'}
-                  </button>
-                  {showDespatchXml && (
-                    <pre style={{
-                      marginTop: 10, padding: 12, background: '#1e293b', color: '#e2e8f0',
-                      borderRadius: 6, fontSize: '0.72rem', overflowX: 'auto', maxHeight: 300,
-                      lineHeight: 1.5,
-                    }}>
-                      {despatchXml}
-                    </pre>
-                  )}
-                </div>
-              ) : (
-                <button
-                  className={s.btnSecondary}
-                  style={{ marginTop: 8, padding: '4px 10px', fontSize: '0.78rem' }}
-                  disabled={despatchLoading}
-                  onClick={handleRetrieveDespatch}
-                >
-                  {despatchLoading ? 'Loading…' : 'Retrieve Despatch XML'}
-                </button>
-              )}
-            </div>
-          )}
         </div>
       )}
 

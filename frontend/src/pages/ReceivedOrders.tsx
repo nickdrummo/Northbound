@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchSellerOrders, PartyOrder } from '../api/parties';
 import { useOrderStatus, OrderStatus } from '../hooks/useOrderStatus';
-import { createDespatch } from '../api/despatch';
 import s from '../styles/shared.module.css';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
@@ -26,10 +25,6 @@ export default function ReceivedOrders() {
   const [orders, setOrders]   = useState<PartyOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
-
-  // Per-order despatch loading/error state
-  const [despatchLoading, setDespatchLoading] = useState<Record<string, boolean>>({});
-  const [despatchError, setDespatchError]     = useState<Record<string, string>>({});
 
   // Filter tab state
   const [filter, setFilter] = useState<'all' | OrderStatus>('all');
@@ -92,20 +87,8 @@ export default function ReceivedOrders() {
   const shippedCount   = orders.filter((o) => getStatus(o.order_id) === 'shipped').length;
   const deliveredCount = orders.filter((o) => getStatus(o.order_id) === 'delivered').length;
 
-  async function handleCreateDespatch(orderId: string) {
-    setDespatchLoading((prev) => ({ ...prev, [orderId]: true }));
-    setDespatchError((prev) => ({ ...prev, [orderId]: '' }));
-    try {
-      await createDespatch(orderId);
-      updateStatus(orderId, 'shipped');
-    } catch (err) {
-      setDespatchError((prev) => ({
-        ...prev,
-        [orderId]: err instanceof Error ? err.message : 'Failed to create despatch advice',
-      }));
-    } finally {
-      setDespatchLoading((prev) => ({ ...prev, [orderId]: false }));
-    }
+  function handleMarkShipped(orderId: string) {
+    updateStatus(orderId, 'shipped');
   }
 
   function handleMarkDelivered(orderId: string) {
@@ -206,21 +189,13 @@ export default function ReceivedOrders() {
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       {status === 'pending' && (
-                        <div>
-                          <button
-                            className={s.btnPrimary}
-                            style={{ padding: '4px 12px', fontSize: '0.78rem' }}
-                            disabled={despatchLoading[order.order_id]}
-                            onClick={() => handleCreateDespatch(order.order_id)}
-                          >
-                            {despatchLoading[order.order_id] ? 'Sending…' : 'Despatch'}
-                          </button>
-                          {despatchError[order.order_id] && (
-                            <p style={{ fontSize: '0.7rem', color: '#dc2626', marginTop: 3, maxWidth: 140 }}>
-                              {despatchError[order.order_id]}
-                            </p>
-                          )}
-                        </div>
+                        <button
+                          className={s.btnPrimary}
+                          style={{ padding: '4px 12px', fontSize: '0.78rem' }}
+                          onClick={() => handleMarkShipped(order.order_id)}
+                        >
+                          Mark Shipped
+                        </button>
                       )}
                       {status === 'shipped' && (
                         <button
