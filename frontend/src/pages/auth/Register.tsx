@@ -29,9 +29,10 @@ function Register() {
 
     setLoading(true);
     try {
-      await register(email, password, passwordConfirm);
-      // Role is stored immediately; externalId is derived from email automatically
+      // Save role to localStorage before calling register() so that
+      // register() picks it up when it reads ROLE_KEY internally.
       setRole(role);
+      await register(email, password, passwordConfirm);
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');

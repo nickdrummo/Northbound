@@ -84,9 +84,10 @@ function clearPersistedAuth(): void {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(EMAIL_KEY);
-    localStorage.removeItem(ROLE_KEY);
-    // Also clean up the old externalId key from previous implementations
-    localStorage.removeItem('northbound_external_id');
+    // Role is intentionally kept across logout — it's a user preference tied
+    // to the account, not a session secret, so the user doesn't have to
+    // re-select it every time they log back in.
+    localStorage.removeItem('northbound_external_id'); // legacy cleanup
   } catch {
     // silently fail
   }
