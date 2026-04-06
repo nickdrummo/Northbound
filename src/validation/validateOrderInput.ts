@@ -234,3 +234,86 @@ export function validatePartyCountryUpdate(body: unknown): ValidationError[] {
   }
   return errors;
 }
+
+export function validateOrderDetailPatch(body: unknown): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  if (!isPlainObject(body)) {
+    return [{ field: 'body', message: 'Request body must be a JSON object' }];
+  }
+
+  const keys = Object.keys(body).filter((k) =>
+    ['currency', 'issue_date', 'order_note'].includes(k)
+  );
+  if (keys.length === 0) {
+    errors.push({
+      field: 'body',
+      message: 'At least one of currency, issue_date, or order_note must be provided',
+    });
+    return errors;
+  }
+
+  if (body.currency !== undefined) {
+    if (!isNonEmptyString(body.currency)) {
+      errors.push({
+        field: 'currency',
+        message: 'currency must be a non-empty string when provided',
+      });
+    }
+  }
+
+  if (body.issue_date !== undefined) {
+    if (!isValidDateString(body.issue_date)) {
+      errors.push({
+        field: 'issue_date',
+        message: 'issue_date must be a valid date in YYYY-MM-DD format',
+      });
+    }
+  }
+
+  if (body.order_note !== undefined && body.order_note !== null) {
+    if (typeof body.order_note !== 'string') {
+      errors.push({
+        field: 'order_note',
+        message: 'order_note must be a string or null when provided',
+      });
+    }
+  }
+
+  return errors;
+}
+
+export function validateOrderResponseInput(body: unknown): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  if (!isPlainObject(body)) {
+    return [{ field: 'body', message: 'Request body must be a JSON object' }];
+  }
+
+  if (!isNonEmptyString(body.response_code)) {
+    errors.push({
+      field: 'response_code',
+      message: 'response_code is required and must be a non-empty string',
+    });
+  }
+
+  if (body.issue_date !== undefined) {
+    if (!isValidDateString(body.issue_date)) {
+      errors.push({
+        field: 'issue_date',
+        message: 'issue_date must be a valid date in YYYY-MM-DD format',
+      });
+    }
+  }
+
+  if (body.note !== undefined && body.note !== null) {
+    if (typeof body.note !== 'string') {
+      errors.push({
+        field: 'note',
+        message: 'note must be a string when provided',
+      });
+    }
+  }
+
+  return errors;
+}

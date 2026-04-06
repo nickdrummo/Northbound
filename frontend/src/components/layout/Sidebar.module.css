@@ -1,0 +1,39 @@
+.sidebar {
+  width: 220px;
+  background-color: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  position: fixed;
+  top: 56px;
+  left: 0;
+  bottom: 0;
+  overflow-y: auto;
+  padding: 16px 0;
+}
+
+.navList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.navLink {
+  display: block;
+  padding: 10px 24px;
+  color: #4a5568;
+  font-size: 0.925rem;
+  font-weight: 500;
+  border-left: 3px solid transparent;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.navLink:hover {
+  background-color: #f0f4ff;
+  color: #2d3a8c;
+}
+
+.navLink.active {
+  background-color: #ebf0ff;
+  color: #2d3a8c;
+  border-left-color: #4361ee;
+  font-weight: 600;
+}

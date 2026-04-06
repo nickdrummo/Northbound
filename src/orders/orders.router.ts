@@ -1,5 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { validateOrderInput, validatePartyCountryUpdate } from '../validation/validateOrderInput';
+import {
+  validateOrderInput,
+  validatePartyCountryUpdate,
+  validateOrderDetailPatch,
+  validateOrderResponseInput,
+} from '../validation/validateOrderInput';
+import { validateRecurringOrderUpdate } from '../validation/validateRecurringOrderUpdate';
 import { generateUBL } from './ubl.service';
 import { AppError, ok, fail } from '../errors';
 import {
@@ -7,11 +13,17 @@ import {
   retrieveOrderByID,
   retrieveOrderXML,
   storeOrder,
+  createRecurringOrder,
+  deleteRecurringOrder,
+  updateRecurringOrder,
   cancelOrder,
   updateOrderPartyCountry,
   updateOrderWithFullPayload,
+  patchOrderDetail,
+  generateOrderResponseForOrder,
 } from './orders.manage';
-
+import { validateRecurringOrderInput } from '../validation/validateRecurringOrderInput';
+import type { OrderResponseInput } from './order.types';
 const router = Router();
 
 // Create-order handler: used for both POST / and POST /generate (Swagger uses POST /orders; we also support /v1/orders/generate)
@@ -62,7 +74,70 @@ async function handleCreateOrder(req: Request, res: Response): Promise<void> {
 router.post('/', handleCreateOrder);
 router.post('/generate', handleCreateOrder);
 
+router.delete('/recurring/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await deleteRecurringOrder(String(req.params.id));
+
+    if (result === null) {
+      res.status(404).json(
+        fail('Recurring order not found', {
+          code: 'RECURRING_ORDER_NOT_FOUND',
+          message: 'Recurring order with the given ID does not exist.',
+        })
+      );
+      return;
+    }
+
+    res.status(200).json(ok('Recurring order deleted successfully', result));
+  } catch (err) {
+    res.status(500).json(
+      fail('Failed to delete recurring order', {
+        code: 'DELETE_RECURRING_ORDER_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
+});
+
+router.post('/recurring', async (req: Request, res: Response): Promise<void> => {
+  const validationErrors = validateRecurringOrderInput(req.body);
+
+  if (validationErrors.length > 0) {
+    res.status(400).json(
+      fail('Validation failed', {
+        code: 'VALIDATION_ERROR',
+        message: 'Request body failed validation',
+        validationErrors,
+      })
+    );
+    return;
+  }
+
+  try {
+    const recurringOrder = await createRecurringOrder(req.body);
+    res.status(201).json(
+      ok('Recurring order created successfully', recurringOrder)
+    );
+  } catch (err) {
+    res.status(500).json(
+      fail('Failed to create recurring order', {
+        code: 'CREATE_RECURRING_ORDER_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
+});
+
 router.get('/', async (req: Request, res: Response) => {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    return res.status(500).json(
+      fail('Failed to retrieve orders', {
+        code: 'LIST_ORDERS_ERROR',
+        message: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set',
+      })
+    );
+  }
+
   try {
     const orders = await listOrders();
 
@@ -129,20 +204,40 @@ router.get('/:id/xml', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id/change', async (req: Request, res: Response) => {
-  const isV2 = req.baseUrl === '/v2/orders';
+router.patch('/recurring/:id', async (req: Request, res: Response): Promise<void> => {
+  const validationErrors = validateRecurringOrderUpdate(req.body);
 
-  // Backward compatibility: v1 route still exists but is not implemented.
-  if (!isV2) {
-    return res.status(501).json(
-      fail('Order change is not available on this API version.', {
-        code: 'ORDER_CHANGE_USE_V2',
-        message:
-          'Use PUT /v2/orders/{orderID}/change with a full order payload (same shape as create).',
+  if (validationErrors.length > 0) {
+    res.status(400).json(
+      fail('Validation failed', {
+        code: 'VALIDATION_ERROR',
+        message: 'Request body failed validation',
+        validationErrors,
+      })
+    );
+    return;
+  }
+
+  try {
+    const updated = await updateRecurringOrder(String(req.params.id), req.body);
+    res.status(200).json(ok('Recurring order updated successfully', updated));
+  } catch (err) {
+    if (err instanceof AppError) {
+      res.status(err.status).json(
+        fail(err.message, { code: err.code, message: err.message })
+      );
+      return;
+    }
+    res.status(500).json(
+      fail('Failed to update recurring order', {
+        code: 'UPDATE_RECURRING_ORDER_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
       })
     );
   }
+});
 
+router.put('/:id/change', async (req: Request, res: Response) => {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
     res.status(500).json(
       fail('Failed to update order', {
@@ -189,19 +284,6 @@ router.put('/:id/change', async (req: Request, res: Response) => {
 });
 
 router.post('/:id/cancel', async (req: Request, res: Response): Promise<void> => {
-  const isV2 = req.baseUrl === '/v2/orders';
-
-  // Backward compatibility: v1 route still exists but is not implemented.
-  if (!isV2) {
-    res.status(501).json(
-      fail('Order cancel is not available on this API version.', {
-        code: 'ORDER_CANCEL_USE_V2',
-        message: 'Use POST /v2/orders/{orderID}/cancel.',
-      })
-    );
-    return;
-  }
-
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
     res.status(500).json(
       fail('Failed to cancel order', {
@@ -235,24 +317,132 @@ router.post('/:id/cancel', async (req: Request, res: Response): Promise<void> =>
   }
 });
 
-router.post('/:id/response', async (_req: Request, res: Response) => {
-  return res.status(501).json(
-    fail('Order response is not implemented in this version of the service.', {
-      code: 'ORDER_RESPONSE_NOT_IMPLEMENTED',
-      message:
-        'Generating UBL OrderResponse documents is out of scope for the current MVP.',
-    })
-  );
+router.post('/:id/response', async (req: Request, res: Response) => {
+  const validationErrors = validateOrderResponseInput(req.body);
+  if (validationErrors.length > 0) {
+    res.status(400).json(
+      fail('Validation failed', {
+        code: 'VALIDATION_ERROR',
+        message: 'Request body failed validation',
+        validationErrors,
+      })
+    );
+    return;
+  }
+
+  try {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      res.status(500).json(
+        fail('Failed to generate order response', {
+          code: 'ORDER_RESPONSE_ERROR',
+          message: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set',
+        })
+      );
+      return;
+    }
+
+    const body = req.body as {
+      response_code: string;
+      issue_date?: string;
+      note?: string;
+    };
+
+    const responseInput: OrderResponseInput = {
+      response_code: body.response_code,
+    };
+    if (body.issue_date !== undefined) {
+      responseInput.issue_date = body.issue_date;
+    }
+    if (body.note !== undefined) {
+      responseInput.note = body.note;
+    }
+
+    const result = await generateOrderResponseForOrder(String(req.params.id), responseInput);
+
+    if (result === null) {
+      res.status(404).json(
+        fail('Order not found', {
+          code: 'ORDER_NOT_FOUND',
+          message: 'Order with the given ID does not exist.',
+        })
+      );
+      return;
+    }
+
+    res.status(201).json(
+      ok('UBL OrderResponse generated successfully.', {
+        orderID: result.orderID,
+        responseID: result.responseID,
+        ubl_xml: result.ubl_xml,
+      })
+    );
+  } catch (err: unknown) {
+    res.status(500).json(
+      fail('Failed to generate order response', {
+        code: 'ORDER_RESPONSE_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
 });
 
-router.patch('/:id/detail', async (_req: Request, res: Response) => {
-  return res.status(501).json(
-    fail('Order detail update is not implemented in this version of the service.', {
-      code: 'ORDER_DETAIL_NOT_IMPLEMENTED',
-      message:
-        'Updating stored order metadata is not supported without additional persistence fields.',
-    })
-  );
+router.patch('/:id/detail', async (req: Request, res: Response) => {
+  const validationErrors = validateOrderDetailPatch(req.body);
+  if (validationErrors.length > 0) {
+    res.status(400).json(
+      fail('Validation failed', {
+        code: 'VALIDATION_ERROR',
+        message: 'Request body failed validation',
+        validationErrors,
+      })
+    );
+    return;
+  }
+
+  try {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      res.status(500).json(
+        fail('Failed to update order detail', {
+          code: 'UPDATE_ORDER_DETAIL_ERROR',
+          message: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set',
+        })
+      );
+      return;
+    }
+
+    const body = req.body as {
+      currency?: string;
+      issue_date?: string;
+      order_note?: string | null;
+    };
+
+    const result = await patchOrderDetail(String(req.params.id), body);
+
+    if (result === null) {
+      res.status(404).json(
+        fail('Order not found', {
+          code: 'ORDER_NOT_FOUND',
+          message: 'Order with the given ID does not exist.',
+        })
+      );
+      return;
+    }
+
+    res.status(200).json(ok('Order detail updated successfully.', result));
+  } catch (err: unknown) {
+    if (err instanceof AppError) {
+      res.status(err.status).json(
+        fail(err.message, { code: err.code, message: err.message })
+      );
+      return;
+    }
+    res.status(500).json(
+      fail('Failed to update order detail', {
+        code: 'UPDATE_ORDER_DETAIL_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
 });
 
 router.patch('/:orderID/party-country', async (req: Request, res: Response) => {

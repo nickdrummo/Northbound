@@ -5,10 +5,10 @@ info:
     A SaaS API for generating and managing standardized UBL 2.1 Order documents.
     This service facilitates the procurement process between Buyer and Seller parties.
 
-    **Versioning:** Create/list/get/xml use `/orders` and `/v1/orders`. **Order change** is implemented
-    under **`/v2/orders/{orderID}/change`** (Sprint 3). Older `PUT /orders/{orderID}/change` returns 501
-    with guidance to use v2.
-  version: "1.1.0"
+    **Paths:** Order routes are mounted at **`/orders`**. The same router is also mounted at **`/v1/orders`**
+    for backward compatibility — every operation is available under both prefixes (e.g. `PUT /orders/{id}/change`
+    and `PUT /v1/orders/{id}/change` are equivalent).
+  version: "1.2.0"
 
 servers:
   - url: https://northbound-w6b3.onrender.com
@@ -20,12 +20,26 @@ tags:
   - name: Health
   - name: Auth
   - name: Orders
-  - name: OrdersV2
 
 security:
   - bearerAuth: []
 
 paths:
+  /:
+    get:
+      tags: [Health]
+      summary: Redirect to API documentation
+      description: The service root redirects browsers and clients to the interactive OpenAPI UI.
+      security: []
+      responses:
+        "302":
+          description: Redirect to `/docs`
+          headers:
+            Location:
+              schema:
+                type: string
+                example: /docs
+
   /health:
     get:
       tags: [Health]
@@ -70,6 +84,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Server misconfiguration (e.g. missing JWT secret) or unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
 
   /auth/register:
     post:
@@ -95,7 +115,98 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Server misconfiguration (e.g. missing JWT secret) or unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
 
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request Password Reset
+      description: Sends a password reset token to the provided email address. Always returns 200 to prevent user enumeration.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "200":
+          description: Request processed (regardless of whether the email exists)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset Password
+      description: Resets the user's password using a valid one-time token received via email. Tokens expire after 1 hour.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: Invalid or expired token, or password too short
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: User Logout
+      description: Logs out the current user by revoking the provided bearer token.
+      requestBody:
+        required: false
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "401":
+          description: Missing, invalid, or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Server misconfiguration or unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+                
   /orders:
     post:
       tags: [Orders]
@@ -131,14 +242,7 @@ paths:
     get:
       tags: [Orders]
       summary: List Orders
-      description: Returns a list of orders.
-      parameters:
-        - name: status
-          in: query
-          required: false
-          schema:
-            type: string
-          description: Optional filter by order status
+      description: Returns all order rows from storage (no query filters are applied).
       responses:
         "200":
           description: List of order rows from storage
@@ -146,8 +250,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OrderListResponse"
-        "401":
-          description: Unauthorized
+        "500":
+          description: Supabase not configured or list failed
           content:
             application/json:
               schema:
@@ -184,11 +288,138 @@ paths:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
 
+
+  /orders/recurring:
+    post:
+      tags: [Orders]
+      summary: Create a recurring order
+      description: Creates a recurring order template that repeats on a defined schedule. The order template is stored and can be retrieved, updated, or deleted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecurringOrderCreateRequest"
+      responses:
+        "201":
+          description: Recurring order created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StandardResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/RecurringOrderObject"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /orders/recurring/{orderID}:
+    patch:
+      tags: [Orders]
+      summary: Update a recurring order
+      description: Partially updates an existing recurring order template. Only provided fields are updated. If order_lines is provided, they replace all existing lines.
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecurringOrderUpdateRequest"
+      responses:
+        "200":
+          description: Recurring order updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StandardResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/RecurringOrderObject"
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+        "404":
+          description: Recurring order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+    delete:
+      tags: [Orders]
+      summary: Delete a recurring order
+      description: Deletes a recurring order template and its associated order lines. Returns the deleted order ID.
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Recurring order deleted successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StandardResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          orderID:
+                            type: string
+                            format: uuid
+        "404":
+          description: Recurring order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+
   /orders/{orderID}:
     get:
       tags: [Orders]
       summary: Retrieve Order by ID
-      description: Returns the stored order row for a given ID.
+      description: Returns the stored order row for a given ID. Same path under `/v1/orders/{orderID}`.
       parameters:
         - name: orderID
           in: path
@@ -205,6 +436,12 @@ paths:
                 $ref: "#/components/schemas/OrderGetResponse"
         "404":
           description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Supabase not configured or retrieval failed
           content:
             application/json:
               schema:
@@ -236,136 +473,15 @@ paths:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
 
+
   /orders/{orderID}/change:
     put:
       tags: [Orders]
-      summary: Change / replace an existing order (v1)
+      summary: Replace an existing order (full payload)
       description: |
-        Order change is not implemented on this API version.
-        Use `PUT /v2/orders/{orderID}/change` instead.
-      parameters:
-        - name: orderID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/OrderCreateRequest"
-      responses:
-        "501":
-          description: Order change not available; use v2
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StandardErrorResponse"
-
-  /orders/{orderID}/cancel:
-    post:
-      tags: [Orders]
-      summary: Cancel an order (not implemented in v1)
-      description: Not implemented in this API version. Use v2 when available.
-      parameters:
-        - name: orderID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "501":
-          description: Order cancel not implemented
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StandardErrorResponse"
-
-  /orders/{orderID}/response:
-    post:
-      tags: [Orders]
-      summary: Submit an order response (not implemented in v1)
-      description: Not implemented in this API version. Use v2 when available.
-      parameters:
-        - name: orderID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "501":
-          description: Order response not implemented
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StandardErrorResponse"
-
-  /orders/{orderID}/detail:
-    patch:
-      tags: [Orders]
-      summary: Update order detail (not implemented in v1)
-      description: Not implemented in this API version. Use v2 when available.
-      parameters:
-        - name: orderID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "501":
-          description: Order detail update not implemented
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StandardErrorResponse"
-
-  /v2/orders/{orderID}/cancel:
-    post:
-      tags: [OrdersV2]
-      summary: Cancel an order (v2)
-      description: |
-        **Sprint 3 / API v2.** Cancels an existing order (deletes the order and associated line items).
-      parameters:
-        - name: orderID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Order cancelled successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CancelledOrderResponse"
-        "404":
-          description: Order not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StandardErrorResponse"
-        "500":
-          description: Database or configuration error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StandardErrorResponse"
-
-  /v2/orders/{orderID}/change:
-    put:
-      tags: [OrdersV2]
-      summary: Change / replace an existing order (v2)
-      description: |
-        **Sprint 3 / API v2.** Replaces the order with a full new payload (same JSON shape as `POST /orders`),
-        updates parties and line items in the database, and returns regenerated UBL XML. The order **id** does not change.
-
-        Use this endpoint instead of `PUT /orders/{orderID}/change`, which returns 501.
+        Replaces the order with a full new body (same JSON shape as `POST /orders`), updates
+        parties and line items, and returns regenerated UBL XML. The order **id** does not change.
+        Requires Supabase env vars. Same path under `/v1/orders/{orderID}/change`.
       parameters:
         - name: orderID
           in: path
@@ -418,12 +534,151 @@ paths:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
         "500":
-          description: Database or configuration error
+          description: Supabase not configured or update failed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
 
+
+  /orders/{orderID}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel an order
+      description: |
+        Deletes the order and its line items. Requires Supabase env vars.
+        Same path under `/v1/orders/{orderID}/cancel`.
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Order cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancelledOrderResponse"
+        "404":
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Supabase not configured or cancel failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /orders/{orderID}/response:
+    post:
+      tags: [Orders]
+      summary: Generate UBL OrderResponse for an order
+      description: >
+        Verifies the order exists in storage, then returns a minimal UBL 2.1 **OrderResponse** document
+        that references this order (`cac:OrderReference`), including a response code (e.g. ACCEPTED).
+        Does not persist the document. Same path under `/v1/orders/{orderID}/response`.
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderResponseRequest"
+      responses:
+        "201":
+          description: OrderResponse XML generated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StandardResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/OrderResponseCreated"
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+        "404":
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Supabase not configured or unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /orders/{orderID}/detail:
+    patch:
+      tags: [Orders]
+      summary: Patch order header fields (non-recurring)
+      description: >
+        Partially updates `currency`, `issue_date`, and/or `order_note` on a **non-recurring** order,
+        then regenerates and returns UBL Order XML. Recurring templates must use
+        `PATCH /orders/recurring/{orderID}`. Same path under `/v1/orders/{orderID}/detail`.
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderDetailPatchRequest"
+      responses:
+        "200":
+          description: Order updated; new UBL Order XML returned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StandardResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/OrderDetailPatched"
+        "400":
+          description: Validation failed or order is recurring (use recurring patch)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+        "404":
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Supabase not configured or update failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+            
   /v2/orders/{orderID}/party-country:
     patch:
       tags:
@@ -686,9 +941,11 @@ components:
           example: UP
         uptime:
           type: number
+          description: Server uptime in seconds since process start
           example: 0
         version:
           type: string
+          description: Application version (from npm package when set)
           example: "1.0.0"
 
     HealthResponse:
@@ -720,6 +977,27 @@ components:
           type: string
         passwordConfirm:
           type: string
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    ResetPasswordRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+          description: The reset token received via email
+        newPassword:
+          type: string
+          description: New password (minimum 8 characters)
+          minLength: 8
 
     AuthToken:
       type: object
@@ -770,6 +1048,7 @@ components:
       properties:
         external_id:
           type: string
+          description: Unique identifier for the party (e.g. from your system)
           example: BUYER-001
         name:
           type: string
@@ -783,6 +1062,7 @@ components:
           type: string
         country:
           type: string
+          description: ISO 3166-1 alpha-2 country code
           example: AU
         postal_code:
           type: string
@@ -793,6 +1073,7 @@ components:
       properties:
         line_id:
           type: string
+          description: Line identifier (e.g. "1", "2")
           example: "1"
         description:
           type: string
@@ -807,6 +1088,7 @@ components:
           example: 49.99
         unit_code:
           type: string
+          description: Unit of measure (defaults to EA if omitted)
           example: EA
 
     CreatedOrder:
@@ -854,10 +1136,14 @@ components:
 
     OrderSummary:
       type: object
+      description: >
+        Raw order row(s) from storage (Supabase `orders` table). Fields follow the DB schema
+        (e.g. `id`, `buyer_id`, `seller_id`, timestamps may use snake_case); not a denormalized DTO.
       additionalProperties: true
 
     OrderObject:
       type: object
+      description: Same shape as a single list entry — raw order row from storage.
       additionalProperties: true
 
     OrderListResponse:
@@ -877,6 +1163,126 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/OrderObject"
+
+
+    RecurringOrderUpdateRequest:
+      type: object
+      minProperties: 1
+      description: >
+        Partial update for a recurring order. At least one property must be sent.
+        If `order_lines` is present, it replaces all existing lines.
+      properties:
+        buyer:
+          $ref: "#/components/schemas/Party"
+        seller:
+          $ref: "#/components/schemas/Party"
+        currency:
+          type: string
+          description: ISO 4217 currency code (updates stored order currency)
+          example: USD
+        order_note:
+          type: string
+          nullable: true
+        order_lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/OrderLine"
+        frequency:
+          type: string
+          enum: [DAILY, WEEKLY, MONTHLY]
+        recur_interval:
+          type: integer
+          minimum: 1
+        recur_start_date:
+          type: string
+          format: date
+        recur_end_date:
+          type: string
+          format: date
+          nullable: true
+
+    RecurringOrderCreateRequest:
+      type: object
+      required:
+        - buyer
+        - seller
+        - currency
+        - order_lines
+        - frequency
+        - recur_interval
+        - recur_start_date
+      properties:
+        buyer:
+          $ref: "#/components/schemas/Party"
+        seller:
+          $ref: "#/components/schemas/Party"
+        currency:
+          type: string
+          example: AUD
+        order_note:
+          type: string
+        order_lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/OrderLine"
+        frequency:
+          type: string
+          enum: [DAILY, WEEKLY, MONTHLY]
+          example: MONTHLY
+        recur_interval:
+          type: integer
+          minimum: 1
+          example: 2
+        recur_start_date:
+          type: string
+          format: date
+          example: "2026-04-01"
+        recur_end_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-12-31"
+
+    RecurringOrderObject:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        buyer_id:
+          type: string
+          format: uuid
+        seller_id:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          example: AUD
+        order_note:
+          type: string
+          nullable: true
+        is_recurring:
+          type: boolean
+          example: true
+        frequency:
+          type: string
+          enum: [DAILY, WEEKLY, MONTHLY]
+        recur_interval:
+          type: integer
+          example: 1
+        recur_start_date:
+          type: string
+          format: date
+        recur_end_date:
+          type: string
+          format: date
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
 
     UpdatePartyCountryRequest:
       type: object
@@ -933,3 +1339,70 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/UpdatedOrderPartyCountry"
+
+    OrderResponseRequest:
+      type: object
+      required: [response_code]
+      properties:
+        response_code:
+          type: string
+          description: Business outcome (e.g. ACCEPTED, REJECTED, CONDITIONALLY_ACCEPTED)
+          example: ACCEPTED
+        issue_date:
+          type: string
+          format: date
+          description: Response document issue date; defaults to today (UTC) if omitted
+        note:
+          type: string
+          description: Optional free-text note embedded in the UBL document
+
+    OrderResponseCreated:
+      type: object
+      required: [orderID, responseID, ubl_xml]
+      properties:
+        orderID:
+          type: string
+          format: uuid
+        responseID:
+          type: string
+          format: uuid
+          description: New identifier for this OrderResponse document
+        ubl_xml:
+          type: string
+          description: UBL 2.1 OrderResponse XML
+
+    OrderDetailPatchRequest:
+      type: object
+      description: At least one property must be provided.
+      minProperties: 1
+      properties:
+        currency:
+          type: string
+          description: ISO 4217 currency code
+          example: USD
+        issue_date:
+          type: string
+          format: date
+        order_note:
+          type: string
+          nullable: true
+          description: Set to null or empty string to clear the note
+
+    OrderDetailPatched:
+      type: object
+      required: [orderID, currency, issue_date, ubl_xml]
+      properties:
+        orderID:
+          type: string
+          format: uuid
+        currency:
+          type: string
+        issue_date:
+          type: string
+          format: date
+        order_note:
+          type: string
+          nullable: true
+        ubl_xml:
+          type: string
+          description: Regenerated UBL 2.1 Order XML

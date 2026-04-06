@@ -1,0 +1,290 @@
+/* ── Page shell ─────────────────────────────────────────── */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pageTitle {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #1e2a45;
+}
+
+.pageSubtitle {
+  font-size: 0.875rem;
+  color: #718096;
+  margin-top: 2px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btnPrimary {
+  padding: 9px 20px;
+  border-radius: 6px;
+  border: none;
+  background-color: #4361ee;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.btnPrimary:hover { background-color: #3451d1; }
+.btnPrimary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.btnSecondary {
+  padding: 9px 20px;
+  border-radius: 6px;
+  border: 1px solid #c3d0e8;
+  background-color: #fff;
+  color: #2d3a8c;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.btnSecondary:hover { background-color: #ebf0ff; border-color: #4361ee; }
+
+.btnDanger {
+  padding: 9px 20px;
+  border-radius: 6px;
+  border: 1px solid #feb2b2;
+  background-color: #fff;
+  color: #c53030;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.btnDanger:hover { background-color: #fff5f5; }
+.btnDanger:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ── Table ───────────────────────────────────────────────── */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.875rem;
+}
+.table th {
+  background-color: #f7fafc;
+  padding: 10px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #4a5568;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.table td {
+  padding: 12px 16px;
+  color: #2d3748;
+  border-bottom: 1px solid #f0f4f8;
+}
+.table tr:last-child td { border-bottom: none; }
+.table tr:hover td { background-color: #f7fafc; }
+
+.emptyCell, .loadingCell {
+  text-align: center;
+  padding: 32px;
+  color: #a0aec0;
+  font-style: italic;
+}
+
+/* ── Badges ──────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.badgeBlue      { background-color: #bee3f8; color: #2c5282; }
+.badgeGreen     { background-color: #c6f6d5; color: #276749; }
+.badgeYellow    { background-color: #fefcbf; color: #744210; }
+.badgeRed       { background-color: #fed7d7; color: #9b2c2c; }
+.badgePurple    { background-color: #e9d8fd; color: #553c9a; }
+
+/* ── Forms ───────────────────────────────────────────────── */
+.card {
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.sectionHeading {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #2d3748;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.formField label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.formField input,
+.formField select,
+.formField textarea {
+  padding: 8px 12px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: #2d3748;
+  background-color: #fff;
+  transition: border-color 0.15s;
+}
+.formField input:focus,
+.formField select:focus,
+.formField textarea:focus {
+  outline: none;
+  border-color: #4361ee;
+  box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+}
+
+.formField textarea { resize: vertical; min-height: 72px; }
+
+.required::after {
+  content: ' *';
+  color: #e53e3e;
+}
+
+.formActions {
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+/* ── Feedback ────────────────────────────────────────────── */
+.error {
+  color: #c53030;
+  font-size: 0.875rem;
+  padding: 10px 14px;
+  background-color: #fff5f5;
+  border: 1px solid #feb2b2;
+  border-radius: 6px;
+}
+
+.success {
+  color: #276749;
+  font-size: 0.875rem;
+  padding: 10px 14px;
+  background-color: #f0fff4;
+  border: 1px solid #9ae6b4;
+  border-radius: 6px;
+}
+
+/* ── Back link ───────────────────────────────────────────── */
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: #4361ee;
+  font-weight: 500;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.backLink:hover { text-decoration: underline; }
+
+/* ── Detail list ─────────────────────────────────────────── */
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+.detailItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.detailLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #718096;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.detailValue {
+  font-size: 0.9rem;
+  color: #2d3748;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+/* ── Mono text ───────────────────────────────────────────── */
+.mono {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.8rem;
+  color: #4a5568;
+}
+
+/* ── Dialog overlay ──────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.dialog {
+  background-color: #fff;
+  border-radius: 10px;
+  padding: 28px 32px;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dialogTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e2a45;
+}
+.dialogBody {
+  font-size: 0.875rem;
+  color: #4a5568;
+  line-height: 1.6;
+}
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

@@ -1,0 +1,40 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Local env files (use .env.example as the template)
+.env
+.env.local
+.env.*.local
+
+# Stale root-tsc artifacts (produced when root tsconfig.json lacked an exclude for frontend/)
+vite.config.js
+vite.config.js.map
+vite.config.d.ts
+vite.config.d.ts.map
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+src/**/*.d.ts.map
+!src/vite-env.d.ts
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
