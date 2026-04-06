@@ -29,22 +29,12 @@ export default function Orders() {
       </div>
 
       {/* Filter tabs */}
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div className={s.tabs}>
         {(['all', 'one-off', 'recurring'] as Filter[]).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            style={{
-              padding: '6px 16px',
-              borderRadius: 20,
-              border: '1px solid',
-              borderColor: filter === f ? '#4361ee' : '#e2e8f0',
-              background: filter === f ? '#ebf0ff' : '#fff',
-              color: filter === f ? '#2d3a8c' : '#718096',
-              fontWeight: filter === f ? 700 : 500,
-              fontSize: '0.8rem',
-              cursor: 'pointer',
-            }}
+            className={`${s.tab} ${filter === f ? s.tabActive : ''}`}
           >
             {f.charAt(0).toUpperCase() + f.slice(1)}
           </button>

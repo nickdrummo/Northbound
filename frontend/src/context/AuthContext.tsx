@@ -9,6 +9,7 @@ import {
 import {
   login as apiLogin,
   register as apiRegister,
+  logoutApi,
   AuthResponse,
 } from '../api/auth';
 
@@ -98,6 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    const currentToken = localStorage.getItem(TOKEN_KEY);
+    if (currentToken) logoutApi(currentToken);
     clearPersistedAuth();
     setAuth({ token: null, userID: null, isAuthenticated: false });
   }, []);

@@ -4,7 +4,6 @@ import styles from './Sidebar.module.css';
 const navItems = [
   { label: 'Dashboard', path: '/' },
   { label: 'Orders', path: '/orders' },
-  { label: 'Suppliers', path: '/suppliers' },
   { label: 'Templates', path: '/templates' },
   { label: 'Settings', path: '/settings' },
 ];

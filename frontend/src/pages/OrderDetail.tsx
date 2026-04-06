@@ -4,6 +4,8 @@ import { useOrder } from '../hooks/useOrder';
 import { cancelOrder } from '../api/orders';
 import s from '../styles/shared.module.css';
 
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+
 export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -38,11 +40,22 @@ export default function OrderDetail() {
           <button className={s.backLink} onClick={() => navigate('/orders')}>← Back to Orders</button>
           <h1 className={s.pageTitle} style={{ marginTop: 6 }}>Order Detail</h1>
         </div>
-        {!order.is_recurring && (
-          <button className={s.btnDanger} onClick={() => setShowConfirm(true)}>
-            Cancel Order
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <a
+            href={`${API_URL}/orders/${order.id}/xml`}
+            target="_blank"
+            rel="noreferrer"
+            className={s.btnSecondary}
+            style={{ textDecoration: 'none' }}
+          >
+            ↓ Download XML
+          </a>
+          {!order.is_recurring && (
+            <button className={s.btnDanger} onClick={() => setShowConfirm(true)}>
+              Cancel Order
+            </button>
+          )}
+        </div>
       </div>
 
       <div className={s.card}>
