@@ -105,6 +105,13 @@ export default function Settings() {
             <span className={s.detailLabel}>Version</span>
             <span className={s.detailValue}>v1 / v2</span>
           </div>
+          <span className={s.detailLabel}>Backend URL</span>
+          <span className={s.mono} style={{ fontSize: '0.85rem' }}>
+            {import.meta.env.VITE_API_URL ?? 'http://localhost:3001'}
+          </span>
+
+          <span className={s.detailLabel}>Order routes</span>
+          <span>/orders (alias /v1/orders)</span>
         </div>
       </div>
     </div>

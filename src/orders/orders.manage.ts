@@ -1,6 +1,19 @@
-import { OrderInput, Party, OrderLine, RecurringOrderInput, RecurringOrderUpdate, RecurringOrder } from "./order.types"; 
+import {
+    OrderInput,
+    Party,
+    OrderLine,
+    RecurringOrderInput,
+    RecurringOrderUpdate,
+    RecurringOrder,
+    OrderDetailPatch,
+    OrderResponseInput,
+    PartySession,
+    PartyReport,
+    PartyOrderSummary,
+    CurrencyBreakdown,
+} from "./order.types";
 import { createClient } from '@supabase/supabase-js';
-import { generateUBL } from './ubl.service';
+import { generateUBL, generateOrderResponseUBL } from './ubl.service';
 import { AppError } from '../errors';
 import dotenv from 'dotenv';
 
@@ -112,7 +125,7 @@ export async function retrieveOrderByID(orderID: string) {
 
 /**
  * Replace an existing order with a new full payload (parties, header, lines), regenerate UBL.
- * Used by PUT /v2/orders/:id/change — keeps the same order id.
+ * Used by PUT /orders/:id/change (and `/v1/orders/...`) — keeps the same order id.
  */
 export async function updateOrderWithFullPayload(
     orderID: string,
@@ -216,7 +229,7 @@ export async function updateOrderWithFullPayload(
 
 /**
  * Cancel (delete) an existing order.
- * Used by POST /v2/orders/:id/cancel.
+ * Used by POST /orders/:id/cancel (and `/v1/orders/...`).
  */
 export async function cancelOrder(orderID: string): Promise<{ orderID: string }> {
     const supabase = getSupabase();
@@ -563,6 +576,177 @@ export async function updateOrderPartyCountry(
 }
 
 /**
+ * Partial update of header fields on a **non-recurring** order; regenerates UBL Order XML.
+ * Recurring templates must use PATCH /orders/recurring/:id.
+ */
+export async function patchOrderDetail(
+    orderID: string,
+    patch: OrderDetailPatch
+): Promise<{
+    orderID: string;
+    currency: string;
+    issue_date: string;
+    order_note: string | null;
+    ubl_xml: string;
+} | null> {
+    const supabase = getSupabase();
+
+    const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderID)
+        .single();
+
+    if (orderError || !order) {
+        return null;
+    }
+
+    if (order.is_recurring === true) {
+        throw new AppError(
+            'USE_RECURRING_PATCH',
+            'Recurring orders must be updated with PATCH /orders/recurring/{id}.',
+            400
+        );
+    }
+
+    const orderFields: Record<string, unknown> = {};
+    if (patch.currency !== undefined) {
+        orderFields.currency = patch.currency;
+    }
+    if (patch.issue_date !== undefined) {
+        orderFields.issue_date = patch.issue_date;
+    }
+    if (patch.order_note !== undefined) {
+        orderFields.order_note =
+            patch.order_note === '' || patch.order_note === null ? null : patch.order_note;
+    }
+
+    if (Object.keys(orderFields).length === 0) {
+        throw new AppError('VALIDATION_ERROR', 'No valid fields to update.', 400);
+    }
+
+    const { error: updateErr } = await supabase
+        .from('orders')
+        .update(orderFields)
+        .eq('id', orderID);
+
+    if (updateErr) {
+        throw new Error(`Failed to update order: ${updateErr.message}`);
+    }
+
+    const { data: refreshed, error: refetchErr } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderID)
+        .single();
+
+    if (refetchErr || !refreshed) {
+        throw new Error('Failed to retrieve order after update');
+    }
+
+    const { data: buyer, error: buyerError } = await supabase
+        .from('parties')
+        .select('*')
+        .eq('id', refreshed.buyer_id)
+        .single();
+
+    if (buyerError || !buyer) {
+        throw new Error('Buyer not found');
+    }
+
+    const { data: seller, error: sellerError } = await supabase
+        .from('parties')
+        .select('*')
+        .eq('id', refreshed.seller_id)
+        .single();
+
+    if (sellerError || !seller) {
+        throw new Error('Seller not found');
+    }
+
+    const { data: lines, error: linesError } = await supabase
+        .from('order_lines')
+        .select('*')
+        .eq('order_id', orderID);
+
+    if (linesError) {
+        throw new Error(`Failed to retrieve order lines: ${linesError.message}`);
+    }
+
+    const rebuiltOrderInput: OrderInput = {
+        buyer: {
+            external_id: buyer.external_id,
+            name: buyer.name,
+            email: buyer.email,
+            street: buyer.street,
+            city: buyer.city,
+            country: buyer.country,
+            postal_code: buyer.postal_code,
+        },
+        seller: {
+            external_id: seller.external_id,
+            name: seller.name,
+            email: seller.email,
+            street: seller.street,
+            city: seller.city,
+            country: seller.country,
+            postal_code: seller.postal_code,
+        },
+        currency: refreshed.currency,
+        issue_date: refreshed.issue_date,
+        order_note: refreshed.order_note,
+        order_lines: (lines ?? []).map((line: any) => ({
+            line_id: line.line_id,
+            description: line.description,
+            quantity: line.quantity,
+            unit_price: line.unit_price,
+            unit_code: line.unit_code,
+        })),
+    };
+
+    const result = generateUBL(rebuiltOrderInput, refreshed.id);
+
+    return {
+        orderID: refreshed.id,
+        currency: refreshed.currency,
+        issue_date: refreshed.issue_date,
+        order_note: refreshed.order_note,
+        ubl_xml: result.ubl_xml,
+    };
+}
+
+/** Build a UBL OrderResponse document for an existing stored order (any order row). */
+export async function generateOrderResponseForOrder(
+    orderID: string,
+    input: OrderResponseInput
+): Promise<{ orderID: string; responseID: string; ubl_xml: string } | null> {
+    const existing = await retrieveOrderByID(orderID);
+    if (!existing) {
+        return null;
+    }
+
+    const issueDate =
+        input.issue_date ?? new Date().toISOString().slice(0, 10);
+
+    const ublParams: {
+        referencedOrderID: string;
+        responseCode: string;
+        issueDate: string;
+        note?: string;
+    } = {
+        referencedOrderID: orderID,
+        responseCode: input.response_code,
+        issueDate,
+    };
+    if (input.note !== undefined) {
+        ublParams.note = input.note;
+    }
+    const { responseID, ubl_xml } = generateOrderResponseUBL(ublParams);
+
+    return { orderID, responseID, ubl_xml };
+}
+
+/**
  * Update an existing recurring order with a partial payload.
  * Only provided fields are updated. If order_lines is provided, they are replaced entirely.
  * Used by PATCH /orders/recurring/:id
@@ -681,4 +865,139 @@ export async function updateRecurringOrder(
     }
 
     return updated as RecurringOrder;
+}
+
+// Returns the order history for a party identified by external_id and role
+export async function getOrdersByParty(
+    externalID: string,
+    role: 'buyer' | 'seller'
+): Promise<PartySession | null> {
+    const supabase = getSupabase();
+
+    const { data: partyRow, error: partyErr } = await supabase
+        .from('parties')
+        .select('*')
+        .eq('external_id', externalID)
+        .single();
+
+    if (partyErr || !partyRow) {
+        return null;
+    }
+
+    const column = role === 'buyer' ? 'buyer_id' : 'seller_id';
+
+    const { data: orders, error: ordersErr } = await supabase
+        .from('orders')
+        .select('*')
+        .eq(column, partyRow.id)
+        .order('issue_date', { ascending: true });
+
+    if (ordersErr) {
+        throw new Error(`Failed to retrieve orders: ${ordersErr.message}`);
+    }
+
+    const orderRows = orders ?? [];
+
+    // Fetch all order lines in one query
+    const orderIds = orderRows.map((o: any) => o.id);
+    let linesByOrderId: Record<string, OrderLine[]> = {};
+
+    if (orderIds.length > 0) {
+        const { data: lines, error: linesErr } = await supabase
+            .from('order_lines')
+            .select('*')
+            .in('order_id', orderIds);
+
+        if (linesErr) {
+            throw new Error(`Failed to retrieve order lines: ${linesErr.message}`);
+        }
+
+        for (const line of lines ?? []) {
+            if (!linesByOrderId[line.order_id]) {
+                linesByOrderId[line.order_id] = [];
+            }
+            (linesByOrderId[line.order_id] as OrderLine[]).push({
+                line_id: line.line_id,
+                description: line.description,
+                quantity: line.quantity,
+                unit_price: line.unit_price,
+                unit_code: line.unit_code,
+            });
+        }
+    }
+
+    const party: Party = {
+        external_id: partyRow.external_id,
+        name: partyRow.name,
+        email: partyRow.email ?? undefined,
+        street: partyRow.street ?? undefined,
+        city: partyRow.city ?? undefined,
+        country: partyRow.country ?? undefined,
+        postal_code: partyRow.postal_code ?? undefined,
+    };
+
+    return {
+        party,
+        role,
+        orders: orderRows.map((order: any) => ({
+            order_id: order.id,
+            currency: order.currency,
+            issue_date: order.issue_date,
+            order_note: order.order_note ?? null,
+            is_recurring: order.is_recurring ?? false,
+            order_lines: linesByOrderId[order.id] ?? [],
+        })),
+    };
+}
+
+// Returns an aggregated spending/sales report for a party
+export async function getPartyReport(
+    externalID: string,
+    role: 'buyer' | 'seller'
+): Promise<PartyReport | null> {
+    const session = await getOrdersByParty(externalID, role);
+    if (!session) return null;
+
+    const orderSummaries: PartyOrderSummary[] = session.orders.map((order) => {
+        const orderValue = order.order_lines.reduce(
+            (sum, line) => sum + line.quantity * line.unit_price,
+            0
+        );
+        return {
+            order_id: order.order_id,
+            currency: order.currency,
+            issue_date: order.issue_date,
+            order_note: order.order_note,
+            order_value: Math.round(orderValue * 100) / 100,
+            line_count: order.order_lines.length,
+        };
+    });
+
+    const totalValue = orderSummaries.reduce((sum, o) => sum + o.order_value, 0);
+    const orderCount = orderSummaries.length;
+    const avgOrderValue = orderCount > 0 ? totalValue / orderCount : 0;
+
+    const currencies: Record<string, CurrencyBreakdown> = {};
+    for (const o of orderSummaries) {
+        if (!currencies[o.currency]) {
+            currencies[o.currency] = { order_count: 0, total_value: 0 };
+        }
+        const cb = currencies[o.currency] as CurrencyBreakdown;
+        cb.order_count++;
+        cb.total_value = Math.round((cb.total_value + o.order_value) * 100) / 100;
+    }
+
+    const sortedDates = orderSummaries.map((o) => o.issue_date).filter(Boolean).sort();
+
+    return {
+        party: session.party,
+        role,
+        order_count: orderCount,
+        total_value: Math.round(totalValue * 100) / 100,
+        avg_order_value: Math.round(avgOrderValue * 100) / 100,
+        currencies,
+        first_order_date: sortedDates[0] ?? null,
+        last_order_date: sortedDates[sortedDates.length - 1] ?? null,
+        orders: orderSummaries,
+    };
 }

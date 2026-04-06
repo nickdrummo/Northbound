@@ -1,5 +1,9 @@
 import { describe, expect, it } from '@jest/globals';
-import { validateOrderInput } from './validateOrderInput';
+import {
+  validateOrderInput,
+  validateOrderDetailPatch,
+  validateOrderResponseInput,
+} from './validateOrderInput';
 
 describe('validateOrderInput', () => {
   const validBody = {
@@ -183,4 +187,31 @@ describe('validateOrderInput', () => {
     ])
   );
 });
+});
+
+describe('validateOrderDetailPatch', () => {
+  it('requires at least one known field', () => {
+    expect(validateOrderDetailPatch({})).not.toEqual([]);
+    expect(validateOrderDetailPatch({ foo: 1 })).not.toEqual([]);
+  });
+
+  it('accepts a valid currency patch', () => {
+    expect(validateOrderDetailPatch({ currency: 'EUR' })).toEqual([]);
+  });
+
+  it('accepts order_note null to clear', () => {
+    expect(validateOrderDetailPatch({ order_note: null })).toEqual([]);
+  });
+});
+
+describe('validateOrderResponseInput', () => {
+  it('requires response_code', () => {
+    expect(validateOrderResponseInput({})).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'response_code' })])
+    );
+  });
+
+  it('accepts minimal valid body', () => {
+    expect(validateOrderResponseInput({ response_code: 'ACCEPTED' })).toEqual([]);
+  });
 });

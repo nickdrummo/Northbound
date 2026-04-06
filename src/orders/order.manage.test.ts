@@ -3,15 +3,21 @@ import {
   retrieveOrderByID,
   updateOrderPartyCountry,
   updateOrderWithFullPayload,
-  cancelOrder
+  cancelOrder,
+  patchOrderDetail,
+  generateOrderResponseForOrder,
 } from './orders.manage';
 import { createClient } from '@supabase/supabase-js';
 import { generateUBL } from './ubl.service';
 
 jest.mock('@supabase/supabase-js');
-jest.mock('./ubl.service', () => ({
-  generateUBL: jest.fn(),
-}));
+jest.mock('./ubl.service', () => {
+  const actual = jest.requireActual<typeof import('./ubl.service')>('./ubl.service');
+  return {
+    ...actual,
+    generateUBL: jest.fn(),
+  };
+});
 
 const mockedGenerateUBL = generateUBL as jest.Mock;
 
@@ -432,5 +438,194 @@ describe('updateOrderPartyCountry', () => {
         await expect(
             updateOrderPartyCountry(testOrderID, 'buyer', 'CN')
         ).rejects.toThrow('Failed to update buyer country: DB update failed');
+    });
+});
+
+describe('patchOrderDetail', () => {
+    const mockOrdersSingle = jest.fn();
+    const mockOrdersEq = jest.fn(() => ({ single: mockOrdersSingle }));
+    const mockOrdersSelect = jest.fn(() => ({ eq: mockOrdersEq }));
+
+    const mockOrdersUpdateEq = jest.fn();
+    const mockOrdersUpdate = jest.fn(() => ({ eq: mockOrdersUpdateEq }));
+
+    const mockPartiesSelectSingle = jest.fn();
+    const mockPartiesSelectEq = jest.fn(() => ({ single: mockPartiesSelectSingle }));
+    const mockPartiesSelect = jest.fn(() => ({ eq: mockPartiesSelectEq }));
+
+    const mockLinesEq = jest.fn();
+    const mockLinesSelect = jest.fn(() => ({ eq: mockLinesEq }));
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        process.env.SUPABASE_URL = 'https://example.supabase.co';
+        process.env.SUPABASE_ANON_KEY = 'test-key';
+
+        (createClient as jest.Mock).mockReturnValue({
+            from: (table: string) => {
+                if (table === 'orders') {
+                    return {
+                        select: mockOrdersSelect,
+                        update: mockOrdersUpdate,
+                    };
+                }
+                if (table === 'parties') {
+                    return { select: mockPartiesSelect };
+                }
+                if (table === 'order_lines') {
+                    return { select: mockLinesSelect };
+                }
+                throw new Error(`Unexpected table: ${table}`);
+            },
+        });
+
+        mockedGenerateUBL.mockReturnValue({
+            orderID: testOrderID,
+            ubl_xml: `<Order>${testOrderID}</Order>`,
+        });
+    });
+
+    test('returns null when order does not exist', async () => {
+        mockOrdersSingle.mockResolvedValueOnce({
+            data: null,
+            error: { message: 'Not found' },
+        });
+
+        const result = await patchOrderDetail(testOrderID, { currency: 'USD' });
+        expect(result).toBeNull();
+    });
+
+    test('throws when order is recurring', async () => {
+        mockOrdersSingle.mockResolvedValueOnce({
+            data: {
+                id: testOrderID,
+                is_recurring: true,
+                buyer_id: 'b',
+                seller_id: 's',
+            },
+            error: null,
+        });
+
+        await expect(
+            patchOrderDetail(testOrderID, { currency: 'USD' })
+        ).rejects.toMatchObject({ code: 'USE_RECURRING_PATCH', status: 400 });
+    });
+
+    test('updates currency and returns regenerated UBL', async () => {
+        mockOrdersSingle
+            .mockResolvedValueOnce({
+                data: {
+                    id: testOrderID,
+                    buyer_id: 'buyer-uuid',
+                    seller_id: 'seller-uuid',
+                    currency: 'AUD',
+                    issue_date: '2024-03-01',
+                    order_note: 'Note',
+                    is_recurring: false,
+                },
+                error: null,
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    id: testOrderID,
+                    buyer_id: 'buyer-uuid',
+                    seller_id: 'seller-uuid',
+                    currency: 'USD',
+                    issue_date: '2024-03-01',
+                    order_note: 'Note',
+                    is_recurring: false,
+                },
+                error: null,
+            });
+
+        mockOrdersUpdateEq.mockResolvedValue({ error: null });
+
+        mockPartiesSelectSingle
+            .mockResolvedValueOnce({
+                data: {
+                    external_id: 'buyer-ext-1',
+                    name: 'Buyer Co',
+                    email: null,
+                    street: null,
+                    city: 'Sydney',
+                    country: 'AU',
+                    postal_code: null,
+                },
+                error: null,
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    external_id: 'seller-ext-1',
+                    name: 'Seller Co',
+                    email: null,
+                    street: null,
+                    city: 'Melbourne',
+                    country: 'AU',
+                    postal_code: null,
+                },
+                error: null,
+            });
+
+        mockLinesEq.mockResolvedValue({
+            data: [
+                {
+                    line_id: '1',
+                    description: 'Widget A',
+                    quantity: 2,
+                    unit_price: 50,
+                    unit_code: 'EA',
+                },
+            ],
+            error: null,
+        });
+
+        const result = await patchOrderDetail(testOrderID, { currency: 'USD' });
+
+        expect(mockOrdersUpdate).toHaveBeenCalledWith({ currency: 'USD' });
+        expect(result).toEqual({
+            orderID: testOrderID,
+            currency: 'USD',
+            issue_date: '2024-03-01',
+            order_note: 'Note',
+            ubl_xml: `<Order>${testOrderID}</Order>`,
+        });
+    });
+});
+
+describe('generateOrderResponseForOrder', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        process.env.SUPABASE_URL = 'https://example.supabase.co';
+        process.env.SUPABASE_ANON_KEY = 'test-key';
+        (createClient as jest.Mock).mockReturnValue({ from: mockFrom });
+    });
+
+    test('returns null when order does not exist', async () => {
+        mockSingle.mockResolvedValue({ data: null, error: { message: 'Not found' } });
+
+        const result = await generateOrderResponseForOrder('missing-id', {
+            response_code: 'ACCEPTED',
+        });
+
+        expect(result).toBeNull();
+    });
+
+    test('returns OrderResponse UBL when order exists', async () => {
+        mockSingle.mockResolvedValue({ data: { id: testOrderID }, error: null });
+
+        const result = await generateOrderResponseForOrder(testOrderID, {
+            response_code: 'ACCEPTED',
+            issue_date: '2024-06-01',
+            note: 'Confirmed',
+        });
+
+        expect(result?.orderID).toBe(testOrderID);
+        expect(result?.responseID).toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        );
+        expect(result?.ubl_xml).toContain('OrderResponse');
+        expect(result?.ubl_xml).toContain(testOrderID);
+        expect(result?.ubl_xml).toContain('ACCEPTED');
+        expect(result?.ubl_xml).toContain('2024-06-01');
     });
 });

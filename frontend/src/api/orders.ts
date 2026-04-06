@@ -157,7 +157,7 @@ export async function updatePartyCountry(
 }
 
 export async function cancelOrder(id: string): Promise<void> {
-  const res = await fetch(`${API_URL}/v2/orders/${id}/cancel`, { method: 'POST' });
+  const res = await fetch(`${API_URL}/orders/${id}/cancel`, { method: 'POST' });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err?.data?.message ?? `Failed to cancel order: ${res.status}`);

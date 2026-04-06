@@ -71,3 +71,56 @@ export interface RecurringOrder {
   recur_end_date: string | null;
   created_at: string;
 }
+
+/** Partial update for `PATCH /orders/:id/detail` (non-recurring orders only). */
+export interface OrderDetailPatch {
+  currency?: string;
+  issue_date?: string;
+  order_note?: string | null;
+}
+
+/** Body for `POST /orders/:id/response` (UBL OrderResponse). */
+export interface OrderResponseInput {
+  response_code: string;
+  issue_date?: string;
+  note?: string;
+}
+
+export interface PartyOrderSummary {
+  order_id: string;
+  currency: string;
+  issue_date: string;
+  order_note: string | null;
+  order_value: number;
+  line_count: number;
+}
+
+export interface CurrencyBreakdown {
+  order_count: number;
+  total_value: number;
+}
+
+export interface PartyReport {
+  party: Party;
+  role: 'buyer' | 'seller';
+  order_count: number;
+  total_value: number;
+  avg_order_value: number;
+  currencies: Record<string, CurrencyBreakdown>;
+  first_order_date: string | null;
+  last_order_date: string | null;
+  orders: PartyOrderSummary[];
+}
+
+export interface PartySession {
+  party: Party;
+  role: 'buyer' | 'seller';
+  orders: Array<{
+    order_id: string;
+    currency: string;
+    issue_date: string;
+    order_note: string | null;
+    is_recurring: boolean;
+    order_lines: OrderLine[];
+  }>;
+}
