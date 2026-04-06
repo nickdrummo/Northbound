@@ -40,9 +40,6 @@ function Login() {
             Purchase orders,{' '}
             <span className={styles.panelTaglineAccent}>done properly.</span>
           </p>
-          <p className={styles.panelSubtext}>
-            Standardised UBL 2.1 order management for small and medium businesses — without the enterprise overhead.
-          </p>
           <div className={styles.panelFeatures}>
             <div className={styles.panelFeature}>
               <span className={styles.panelFeatureDot} />
