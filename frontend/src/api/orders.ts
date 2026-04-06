@@ -77,6 +77,22 @@ export async function createOrder(input: OrderInput): Promise<{ orderID: string 
   return json.data;
 }
 
+export async function updatePartyCountry(
+  orderId: string,
+  role: 'buyer' | 'seller',
+  country: string,
+): Promise<void> {
+  const res = await fetch(`${API_URL}/orders/${orderId}/party-country`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role, country: country.toUpperCase() }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message ?? err?.message ?? `Failed to update party country: ${res.status}`);
+  }
+}
+
 export async function cancelOrder(id: string): Promise<void> {
   const res = await fetch(`${API_URL}/v2/orders/${id}/cancel`, { method: 'POST' });
   if (!res.ok) {

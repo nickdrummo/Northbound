@@ -1,10 +1,38 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useOrder } from '../hooks/useOrder';
-import { cancelOrder } from '../api/orders';
+import { cancelOrder, updatePartyCountry } from '../api/orders';
 import s from '../styles/shared.module.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+
+// ISO 3166-1 alpha-2 codes the backend validates against
+const COUNTRIES: { code: string; name: string }[] = [
+  { code: 'AU', name: 'Australia' },
+  { code: 'US', name: 'United States' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'NZ', name: 'New Zealand' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'FR', name: 'France' },
+  { code: 'JP', name: 'Japan' },
+  { code: 'CN', name: 'China' },
+  { code: 'IN', name: 'India' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'HK', name: 'Hong Kong' },
+  { code: 'NL', name: 'Netherlands' },
+  { code: 'SE', name: 'Sweden' },
+  { code: 'NO', name: 'Norway' },
+  { code: 'DK', name: 'Denmark' },
+  { code: 'CH', name: 'Switzerland' },
+  { code: 'IT', name: 'Italy' },
+  { code: 'ES', name: 'Spain' },
+  { code: 'BR', name: 'Brazil' },
+  { code: 'MX', name: 'Mexico' },
+  { code: 'ZA', name: 'South Africa' },
+  { code: 'KR', name: 'South Korea' },
+  { code: 'AE', name: 'UAE' },
+];
 
 export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +42,13 @@ export default function OrderDetail() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+
+  // Party country edit state
+  const [countryRole, setCountryRole] = useState<'buyer' | 'seller'>('buyer');
+  const [countryCode, setCountryCode] = useState('AU');
+  const [countrySubmitting, setCountrySubmitting] = useState(false);
+  const [countryError, setCountryError] = useState<string | null>(null);
+  const [countrySuccess, setCountrySuccess] = useState(false);
 
   async function handleCancel() {
     if (!order) return;
@@ -27,6 +62,22 @@ export default function OrderDetail() {
       setCancelError(err instanceof Error ? err.message : 'Failed to cancel order');
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function handleCountryUpdate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!order) return;
+    setCountrySubmitting(true);
+    setCountryError(null);
+    setCountrySuccess(false);
+    try {
+      await updatePartyCountry(order.id, countryRole, countryCode);
+      setCountrySuccess(true);
+    } catch (err) {
+      setCountryError(err instanceof Error ? err.message : 'Failed to update country');
+    } finally {
+      setCountrySubmitting(false);
     }
   }
 
@@ -104,9 +155,35 @@ export default function OrderDetail() {
             <span className={`${s.detailValue} ${s.mono}`}>{order.seller_id}</span>
           </div>
         </div>
-        <p style={{ marginTop: 12, fontSize: '0.8rem', color: '#a0aec0' }}>
-          Full party names will be available once a Suppliers endpoint is added to the backend.
-        </p>
+
+        {/* Update party country */}
+        <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid #f1f5f9' }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+            Update Party Country
+          </p>
+          <form onSubmit={handleCountryUpdate} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className={s.formField} style={{ minWidth: 120 }}>
+              <label>Party</label>
+              <select value={countryRole} onChange={(e) => setCountryRole(e.target.value as 'buyer' | 'seller')}>
+                <option value="buyer">Buyer</option>
+                <option value="seller">Seller</option>
+              </select>
+            </div>
+            <div className={s.formField} style={{ minWidth: 180 }}>
+              <label>Country</label>
+              <select value={countryCode} onChange={(e) => { setCountryCode(e.target.value); setCountrySuccess(false); }}>
+                {COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
+                ))}
+              </select>
+            </div>
+            <button type="submit" className={s.btnPrimary} disabled={countrySubmitting} style={{ marginBottom: 1 }}>
+              {countrySubmitting ? 'Saving…' : 'Update'}
+            </button>
+          </form>
+          {countryError  && <p className={s.error}  style={{ marginTop: 10 }}>{countryError}</p>}
+          {countrySuccess && <p className={s.success} style={{ marginTop: 10 }}>Country updated successfully.</p>}
+        </div>
       </div>
 
       {order.is_recurring && (
@@ -135,7 +212,6 @@ export default function OrderDetail() {
 
       {cancelError && <p className={s.error}>{cancelError}</p>}
 
-      {/* Cancel confirmation dialog */}
       {showConfirm && (
         <div className={s.overlay}>
           <div className={s.dialog}>

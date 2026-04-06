@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createOrder, OrderInput, OrderLine, Party } from '../api/orders';
+import { getDefaultCurrency } from '../hooks/usePreferences';
 import s from '../styles/shared.module.css';
 
 const EMPTY_PARTY: Party = {
@@ -74,7 +75,7 @@ export default function CreateOrder() {
 
   const [buyer, setBuyer] = useState<Party>({ ...EMPTY_PARTY });
   const [seller, setSeller] = useState<Party>({ ...EMPTY_PARTY });
-  const [currency, setCurrency] = useState('AUD');
+  const [currency, setCurrency] = useState(getDefaultCurrency);
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [note, setNote] = useState('');
   const [lines, setLines] = useState<Omit<OrderLine, 'line_id'>[]>([{ ...EMPTY_LINE }]);
