@@ -473,58 +473,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
 
-  /orders/{orderID}/party-country:
-    patch:
-      tags: [Orders]
-      summary: Update buyer or seller country for an existing order
-      description: >
-        Updates the ISO country code on the buyer or seller party for this order and returns
-        regenerated UBL XML. Order currency is not changed. Also available as
-        `PATCH /v1/orders/{orderID}/party-country`.
-      parameters:
-        - name: orderID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdatePartyCountryRequest"
-            examples:
-              updateBuyerCountry:
-                summary: Update buyer country
-                value:
-                  role: buyer
-                  country: AU
-      responses:
-        "200":
-          description: Party country updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UpdatePartyCountryResponse"
-        "400":
-          description: Missing or invalid fields
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ValidationErrorResponse"
-        "404":
-          description: Order not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StandardErrorResponse"
-        "500":
-          description: Failed to update party country (e.g. Supabase or regeneration error)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StandardErrorResponse"
 
   /orders/{orderID}/change:
     put:
@@ -591,6 +539,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
+
 
   /orders/{orderID}/cancel:
     post:
@@ -729,6 +678,185 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
+            
+  /v2/orders/{orderID}/party-country:
+    patch:
+      tags:
+        - OrdersV2
+      summary: Update buyer or seller country for an existing order
+      description: >
+        **Sprint 3 / API v2.** Updates the country field of the specified
+        party (buyer or seller) for an existing order and returns the
+        regenerated UBL XML. Currency remains unchanged.
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          description: UUID of the order to update.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePartyCountryRequest"
+            examples:
+              updateBuyerCountry:
+                summary: Update buyer country
+                value:
+                  role: buyer
+                  country: CN
+      responses:
+        "200":
+          description: Order party country updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdatePartyCountryResponse"
+              examples:
+                success:
+                  summary: Successful update
+                  value:
+                    success: true
+                    message: Order party country updated successfully
+                    data:
+                      orderID: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                      role: buyer
+                      country: CN
+                      currency: AUD
+                      issue_date: "2024-03-01"
+                      order_note: Test note
+                      buyer:
+                        external_id: buyer-ext-1
+                        name: Buyer Co
+                        email: buyer@example.com
+                        street: 1 Buyer St
+                        city: Sydney
+                        country: CN
+                        postal_code: "2000"
+                      seller:
+                        external_id: seller-ext-1
+                        name: Seller Co
+                        email: seller@example.com
+                        street: 2 Seller St
+                        city: Melbourne
+                        country: AU
+                        postal_code: "3000"
+                      order_lines:
+                        - line_id: "1"
+                          description: Widget A
+                          quantity: 2
+                          unit_price: 50
+                          unit_code: EA
+                        - line_id: "2"
+                          description: Widget B
+                          quantity: 1
+                          unit_price: 100
+                          unit_code: EA
+                      ubl_xml: "<Order>3fa85f64-5717-4562-b3fc-2c963f66afa6</Order>"
+                    error: null
+        "400":
+          description: Request body failed validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+              examples:
+                bodyNotObject:
+                  summary: Request body is not a JSON object
+                  value:
+                    success: false
+                    message: Validation failed
+                    data: null
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Request body failed validation
+                      validationErrors:
+                        - field: body
+                          message: Request body must be a JSON object
+                invalidRole:
+                  summary: Invalid role value
+                  value:
+                    success: false
+                    message: Validation failed
+                    data: null
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Request body failed validation
+                      validationErrors:
+                        - field: role
+                          message: role is required and must be either buyer or seller
+  
+                missingCountry:
+                  summary: Missing country
+                  value:
+                    success: false
+                    message: Validation failed
+                    data: null
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Request body failed validation
+                      validationErrors:
+                        - field: country
+                          message: country is required
+  
+                invalidCountryCode:
+                  summary: Invalid country code
+                  value:
+                    success: false
+                    message: Validation failed
+                    data: null
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Request body failed validation
+                      validationErrors:
+                        - field: country
+                          message: country must be a valid ISO 3166-1 country code
+  
+        "404":
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+              examples:
+                orderNotFound:
+                  summary: Order does not exist
+                  value:
+                    success: false
+                    message: Order not found
+                    data: null
+                    error:
+                      code: ORDER_NOT_FOUND
+                      message: Order with the given ID does not exist.
+  
+        "500":
+          description: Failed to update order party country
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+              examples:
+                supabaseEnvMissing:
+                  summary: Supabase environment variables missing
+                  value:
+                    success: false
+                    message: Failed to update order party country
+                    data: null
+                    error:
+                      code: UPDATE_ORDER_ERROR
+                      message: SUPABASE_URL and SUPABASE_ANON_KEY must be set
+                updateFailed:
+                  summary: Unexpected update error
+                  value:
+                    success: false
+                    message: Failed to update order party country
+                    data: null
+                    error:
+                      code: UPDATE_ORDER_ERROR
+                      message: Failed to update buyer country: DB update failed
 
 components:
   securitySchemes:
