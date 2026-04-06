@@ -70,6 +70,8 @@ Create a `.env` file in the project root. The following variables are used:
 | `JWT_SECRET` | Yes (for auth) | Secret used to sign and verify JWT tokens. Use a long, random string in production. |
 | `SUPABASE_URL` | Yes (for orders) | Your Supabase project URL. |
 | `SUPABASE_ANON_KEY` | Yes (for orders) | Supabase anonymous (public) key for API access. |
+| `DEVEX_API_KEY` | No | [DevEx Despatch API](https://devex.cloud.tcore.network/api-docs/) key for `/orders/.../despatch` routes. |
+| `DEVEX_API_BASE_URL` | No | Defaults to `https://devex.cloud.tcore.network`. |
 
 **Example `.env` (do not commit this file):**
 
@@ -128,6 +130,9 @@ Base URL when running locally: **`http://localhost:3000`**. Deployed example: **
 | **POST** | `/orders/recurring` or `/v1/orders/recurring` | Create a recurring order template. |
 | **PATCH** | `/orders/recurring/:id` or `/v1/orders/recurring/:id` | Partial update of a recurring order (optional fields include `currency`, schedule, parties, `order_lines`). |
 | **DELETE** | `/orders/recurring/:id` or `/v1/orders/recurring/:id` | Delete a recurring order template. |
+| **GET** | `/orders/despatch/list` or `/v1/orders/despatch/list` | **DevEx integration:** list Despatch Advice records for your API key (requires `DEVEX_API_KEY`). |
+| **POST** | `/orders/:id/despatch` or `/v1/orders/:id/despatch` | **DevEx integration:** send this order’s UBL Order XML to DevEx to create Despatch Advice (`DEVEX_API_KEY`). |
+| **GET** | `/orders/:id/despatch?adviceId=<uuid>` | **DevEx integration:** retrieve Despatch Advice (by `adviceId`, or omit for lookup by order XML). |
 | **POST** | `/auth/forgot-password` | Request a password reset (email in body). |
 | **POST** | `/auth/reset-password` | Complete reset with `token` and `newPassword`. |
 | **POST** | `/auth/logout` | Revoke JWT (`Authorization: Bearer …`). |

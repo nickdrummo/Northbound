@@ -30,6 +30,13 @@ function getSupabase() {
     );
 }
 
+type DispatchAdviceStatus =
+    | 'CREATED'
+    | 'RETRIEVED'
+    | 'CANCELLED_ORDER'
+    | 'CANCELLED_FULFILMENT'
+    | 'ERROR';
+
 // Saves a new order to the database. Matches schema: parties.id (uuid), orders.buyer_id/seller_id (uuid FK), order_lines.
 export async function storeOrder(orderID: string, orderInput: OrderInput, _ublXml: string): Promise<void> {
     const supabase = getSupabase();
@@ -357,6 +364,67 @@ export async function retrieveOrderXML(orderID: string): Promise<string> {
 
     const result = generateUBL(rebuiltOrderInput, order.id);
     return result.ubl_xml;
+}
+
+/**
+ * Records DevEx despatch advice IDs in Supabase for an order.
+ * Upserts on `devex_advice_id` so retries don't create duplicates.
+ */
+export async function upsertDispatchAdvicesForOrder(
+    orderID: string,
+    devexAdviceIDs: string[],
+    status: DispatchAdviceStatus = 'CREATED'
+): Promise<void> {
+    const supabase = getSupabase();
+
+    if (devexAdviceIDs.length === 0) return;
+
+    const nowIso = new Date().toISOString();
+    const rows = devexAdviceIDs.map((id) => ({
+        order_id: orderID,
+        devex_advice_id: id,
+        status,
+        updated_at: nowIso,
+    }));
+
+    const { error } = await supabase
+        .from('dispatch_advices')
+        .upsert(rows, { onConflict: 'devex_advice_id' });
+
+    if (error) {
+        throw new Error(`Failed to store dispatch advice ids: ${error.message}`);
+    }
+}
+
+/**
+ * Update a stored dispatch advice row with retrieved XML and sync timestamp.
+ * Falls back to upsert (by devex_advice_id) if the row doesn't exist yet.
+ */
+export async function syncDispatchAdviceXml(params: {
+    orderID: string;
+    devexAdviceID: string;
+    dispatchXml: string;
+    status?: DispatchAdviceStatus;
+}): Promise<void> {
+    const supabase = getSupabase();
+    const nowIso = new Date().toISOString();
+    const status = params.status ?? 'RETRIEVED';
+
+    const { error } = await supabase.from('dispatch_advices').upsert(
+        {
+            order_id: params.orderID,
+            devex_advice_id: params.devexAdviceID,
+            status,
+            dispatch_xml: params.dispatchXml,
+            last_synced_at: nowIso,
+            updated_at: nowIso,
+        },
+        { onConflict: 'devex_advice_id' }
+    );
+
+    if (error) {
+        throw new Error(`Failed to sync dispatch advice: ${error.message}`);
+    }
 }
 
 // Upserts a party and returns its internal UUID (shared helper)
