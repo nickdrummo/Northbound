@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { createOrder, OrderInput, OrderLine, Party } from '../api/orders';
+import {
+  createOrder, createRecurringOrder, fetchOrders, fetchOrder, fetchOrderDetails,
+  OrderInput, RecurringOrderInput, RecurringFrequency, OrderLine, Party, Order,
+} from '../api/orders';
 import { getDefaultCurrency } from '../hooks/usePreferences';
 import s from '../styles/shared.module.css';
 
@@ -103,8 +106,31 @@ export default function CreateOrder() {
   const [note, setNote]       = useState('');
   const [lines, setLines]     = useState<Omit<OrderLine, 'line_id'>[]>([{ ...EMPTY_LINE }]);
 
+  // Recurring order state
+  const [isRecurring, setIsRecurring]       = useState(false);
+  const [frequency, setFrequency]           = useState<RecurringFrequency>('MONTHLY');
+  const [recurInterval, setRecurInterval]   = useState(1);
+  const [recurStartDate, setRecurStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [recurEndDate, setRecurEndDate]     = useState('');
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState<string | null>(null);
+
+  // Template picker state
+  const [templates, setTemplates]           = useState<Order[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [applyingTemplate, setApplyingTemplate]     = useState(false);
+  const [templateApplied, setTemplateApplied]       = useState(false);
+
+  // Fetch recurring orders (templates) once on mount
+  useEffect(() => {
+    setTemplatesLoading(true);
+    fetchOrders()
+      .then((all) => setTemplates(all.filter((o) => o.is_recurring)))
+      .catch(() => { /* non-fatal */ })
+      .finally(() => setTemplatesLoading(false));
+  }, []);
 
   // Sellers shouldn't be creating orders
   if (role === 'seller') {
@@ -142,15 +168,65 @@ export default function CreateOrder() {
     setLines((prev) => prev.filter((_, i) => i !== index));
   }
 
+  async function handleLoadTemplate() {
+    if (!selectedTemplateId) return;
+    setApplyingTemplate(true);
+    setError(null);
+    try {
+      const [order, details] = await Promise.all([
+        fetchOrder(selectedTemplateId),
+        fetchOrderDetails(selectedTemplateId).catch(() => null),
+      ]);
+
+      // Recurrence settings — reset start date to today, keep interval/frequency/end
+      setIsRecurring(true);
+      if (order.frequency) setFrequency(order.frequency as RecurringFrequency);
+      if (order.recur_interval) setRecurInterval(order.recur_interval);
+      setRecurStartDate(new Date().toISOString().split('T')[0]);
+      setRecurEndDate(order.recur_end_date ?? '');
+
+      // Order meta
+      setCurrency(order.currency);
+      setNote(order.order_note ?? '');
+
+      // Party data from XML — buyer external_id is locked if user is a buyer
+      if (details) {
+        setBuyer((prev) => ({
+          ...prev,
+          external_id: lockedBuyerId || details.buyerEndpointId || prev.external_id,
+          name: details.buyerName || prev.name,
+        }));
+        setSeller((prev) => ({
+          ...prev,
+          external_id: details.sellerEndpointId || prev.external_id,
+          name: details.sellerName || prev.name,
+        }));
+        if (details.order_lines.length > 0) {
+          setLines(details.order_lines.map((l) => ({
+            description: l.description,
+            quantity:    l.quantity,
+            unit_price:  l.unit_price,
+            unit_code:   l.unit_code,
+          })));
+        }
+      }
+
+      setTemplateApplied(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load template.');
+    } finally {
+      setApplyingTemplate(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (lines.length === 0) { setError('Add at least one order line.'); return; }
 
-    const input: OrderInput = {
+    const sharedFields = {
       buyer: cleanParty(buyer),
       seller: cleanParty(seller),
       currency,
-      issue_date: issueDate,
       order_note: note || undefined,
       order_lines: lines.map((l, i) => ({
         ...l,
@@ -163,7 +239,23 @@ export default function CreateOrder() {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await createOrder(input);
+      let result: { orderID: string };
+      if (isRecurring) {
+        const input: RecurringOrderInput = {
+          ...sharedFields,
+          frequency,
+          recur_interval: Number(recurInterval),
+          recur_start_date: recurStartDate,
+          recur_end_date: recurEndDate || undefined,
+        };
+        result = await createRecurringOrder(input);
+      } else {
+        const input: OrderInput = {
+          ...sharedFields,
+          issue_date: issueDate,
+        };
+        result = await createOrder(input);
+      }
       navigate(`/orders/${result.orderID}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create order.');
@@ -182,6 +274,54 @@ export default function CreateOrder() {
         </div>
       </div>
 
+      {/* Template picker */}
+      <div className={s.card}>
+        <p className={s.sectionHeading}>Load from Recurring Template</p>
+        {templatesLoading ? (
+          <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Loading templates…</p>
+        ) : templates.length === 0 ? (
+          <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+            No recurring templates available.{' '}
+            <button type="button" className={s.backLink} onClick={() => navigate('/templates/new')}>
+              Create one
+            </button>
+          </p>
+        ) : (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className={s.formField} style={{ flex: '1 1 280px', minWidth: 200, marginBottom: 0 }}>
+              <label>Template</label>
+              <select
+                value={selectedTemplateId}
+                onChange={(e) => { setSelectedTemplateId(e.target.value); setTemplateApplied(false); }}
+              >
+                <option value="">— Select a template —</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.frequency} · every {t.recur_interval} · {t.currency}
+                    {t.recur_end_date ? ` · ends ${t.recur_end_date}` : ' · ongoing'}
+                    {' · '}{t.id.slice(0, 8)}…
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              className={s.btnSecondary}
+              disabled={!selectedTemplateId || applyingTemplate}
+              onClick={handleLoadTemplate}
+              style={{ marginBottom: 1 }}
+            >
+              {applyingTemplate ? 'Applying…' : 'Apply Template'}
+            </button>
+          </div>
+        )}
+        {templateApplied && (
+          <p style={{ fontSize: '0.8rem', color: '#15803d', marginTop: 10, fontWeight: 500 }}>
+            ✓ Template applied — review and adjust the fields below before submitting.
+          </p>
+        )}
+      </div>
+
       <PartySection label="Buyer (Your Organisation)" data={buyer} onChange={updateBuyer} lockExternalId={!!lockedBuyerId} />
       <PartySection label="Seller (Supplier)" data={seller} onChange={updateSeller} />
 
@@ -197,15 +337,70 @@ export default function CreateOrder() {
               ))}
             </select>
           </div>
-          <div className={s.formField}>
-            <label className={s.required}>Issue Date</label>
-            <input type="date" value={issueDate} required onChange={(e) => setIssueDate(e.target.value)} />
-          </div>
+          {!isRecurring && (
+            <div className={s.formField}>
+              <label className={s.required}>Issue Date</label>
+              <input type="date" value={issueDate} required={!isRecurring} onChange={(e) => setIssueDate(e.target.value)} />
+            </div>
+          )}
           <div className={s.formField} style={{ gridColumn: '1 / -1' }}>
             <label>Order Note</label>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note about this order" />
           </div>
+          {/* Recurring toggle */}
+          <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              id="isRecurring"
+              type="checkbox"
+              checked={isRecurring}
+              onChange={(e) => setIsRecurring(e.target.checked)}
+              style={{ width: 16, height: 16, cursor: 'pointer' }}
+            />
+            <label htmlFor="isRecurring" style={{ fontSize: '0.875rem', color: '#374151', cursor: 'pointer', fontWeight: 500 }}>
+              Make this a recurring order
+            </label>
+          </div>
         </div>
+
+        {/* Recurring fields */}
+        {isRecurring && (
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
+            <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+              Recurrence Schedule
+            </p>
+            <div className={s.formGrid}>
+              <div className={s.formField}>
+                <label className={s.required}>Frequency</label>
+                <select value={frequency} onChange={(e) => setFrequency(e.target.value as RecurringFrequency)}>
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                </select>
+              </div>
+              <div className={s.formField}>
+                <label className={s.required}>Every</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="number" min={1} value={recurInterval} required={isRecurring}
+                    onChange={(e) => setRecurInterval(Number(e.target.value))}
+                    style={{ width: 80 }}
+                  />
+                  <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                    {frequency === 'DAILY' ? 'day(s)' : frequency === 'WEEKLY' ? 'week(s)' : 'month(s)'}
+                  </span>
+                </div>
+              </div>
+              <div className={s.formField}>
+                <label className={s.required}>Start Date</label>
+                <input type="date" value={recurStartDate} required={isRecurring} onChange={(e) => setRecurStartDate(e.target.value)} />
+              </div>
+              <div className={s.formField}>
+                <label>End Date <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 400 }}>(optional — leave blank for ongoing)</span></label>
+                <input type="date" value={recurEndDate} min={recurStartDate} onChange={(e) => setRecurEndDate(e.target.value)} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Order lines */}

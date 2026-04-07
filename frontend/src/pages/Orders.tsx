@@ -97,11 +97,9 @@ export default function Orders() {
                     </span>
                   </td>
                   <td>
-                    {!order.is_recurring && (
-                      <span className={`${s.badge} ${STATUS_BADGE[status]}`}>
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                      </span>
-                    )}
+                    <span className={`${s.badge} ${STATUS_BADGE[status]}`}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </span>
                   </td>
                   <td>{order.order_note ?? '—'}</td>
                 </tr>

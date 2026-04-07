@@ -154,6 +154,7 @@ export default function ReceivedOrders() {
                 <th>Order ID</th>
                 <th>Date</th>
                 <th>Currency</th>
+                <th>Type</th>
                 <th>Lines</th>
                 <th>Value</th>
                 <th>Status</th>
@@ -178,6 +179,11 @@ export default function ReceivedOrders() {
                     </td>
                     <td>{order.issue_date}</td>
                     <td>{order.currency}</td>
+                    <td>
+                      <span className={`${s.badge} ${order.is_recurring ? s.badgePurple : s.badgeBlue}`}>
+                        {order.is_recurring ? 'Recurring' : 'One-off'}
+                      </span>
+                    </td>
                     <td style={{ textAlign: 'center' }}>{order.order_lines.length}</td>
                     <td style={{ fontWeight: 600 }}>
                       {order.currency} {total.toFixed(2)}
@@ -206,8 +212,17 @@ export default function ReceivedOrders() {
                           Mark Delivered
                         </button>
                       )}
-                      {status === 'delivered' && (
+                      {status === 'delivered' && !order.is_recurring && (
                         <span style={{ fontSize: '0.78rem', color: '#15803d' }}>✓ Complete</span>
+                      )}
+                      {status === 'delivered' && order.is_recurring && (
+                        <button
+                          className={s.btnPrimary}
+                          style={{ padding: '4px 12px', fontSize: '0.78rem' }}
+                          onClick={() => handleMarkShipped(order.order_id)}
+                        >
+                          Re-dispatch
+                        </button>
                       )}
                     </td>
                   </tr>
