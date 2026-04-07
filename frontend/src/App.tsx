@@ -14,11 +14,12 @@ import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
 import CreateOrder from './pages/CreateOrder';
-import Suppliers from './pages/Suppliers';
 import Templates from './pages/Templates';
 import CreateTemplate from './pages/CreateTemplate';
 import EditTemplate from './pages/EditTemplate';
 import Settings from './pages/Settings';
+import ReceivedOrders from './pages/ReceivedOrders';
+import EditOrder from './pages/EditOrder';
 
 function ProtectedLayout() {
   return (
@@ -47,7 +48,8 @@ function App() {
             <Route path="/orders" element={<Orders />} />
             <Route path="/orders/new" element={<CreateOrder />} />
             <Route path="/orders/:id" element={<OrderDetail />} />
-            <Route path="/suppliers" element={<Suppliers />} />
+            <Route path="/orders/:id/edit" element={<EditOrder />} />
+            <Route path="/received-orders" element={<ReceivedOrders />} />
             <Route path="/templates" element={<Templates />} />
             <Route path="/templates/new" element={<CreateTemplate />} />
             <Route path="/templates/:id/edit" element={<EditTemplate />} />

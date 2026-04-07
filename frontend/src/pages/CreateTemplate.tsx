@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createRecurringOrder, RecurringFrequency, RecurringOrderInput } from '../api/recurring';
 import { Party, OrderLine } from '../api/orders';
+import { getDefaultCurrency } from '../hooks/usePreferences';
 import s from '../styles/shared.module.css';
 
 const EMPTY_PARTY: Party = {
@@ -15,7 +16,7 @@ export default function CreateTemplate() {
 
   const [buyer, setBuyer] = useState<Party>({ ...EMPTY_PARTY });
   const [seller, setSeller] = useState<Party>({ ...EMPTY_PARTY });
-  const [currency, setCurrency] = useState('AUD');
+  const [currency, setCurrency] = useState(getDefaultCurrency);
   const [note, setNote] = useState('');
   const [frequency, setFrequency] = useState<RecurringFrequency>('MONTHLY');
   const [interval, setInterval] = useState(1);

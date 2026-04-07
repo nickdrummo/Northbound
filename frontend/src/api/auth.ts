@@ -57,3 +57,17 @@ export async function resetPassword(
 ): Promise<void> {
   await authFetch<null>('/auth/reset-password', { token, newPassword });
 }
+
+export async function logoutApi(token: string): Promise<void> {
+  try {
+    await fetch(`${API_URL}/auth/logout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  } catch {
+    // Best-effort — local state is cleared regardless
+  }
+}
