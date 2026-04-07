@@ -6,12 +6,14 @@ const BUYER_ITEMS = [
   { label: 'Dashboard',  path: '/' },
   { label: 'My Orders',  path: '/orders' },
   { label: 'Templates',  path: '/templates' },
+  { label: 'Analytics',  path: '/analytics' },
   { label: 'Settings',   path: '/settings' },
 ];
 
 const SELLER_ITEMS = [
   { label: 'Dashboard',        path: '/' },
   { label: 'Received Orders',  path: '/received-orders' },
+  { label: 'Analytics',        path: '/analytics' },
   { label: 'Settings',         path: '/settings' },
 ];
 
@@ -19,6 +21,7 @@ const DEFAULT_ITEMS = [
   { label: 'Dashboard',  path: '/' },
   { label: 'Orders',     path: '/orders' },
   { label: 'Templates',  path: '/templates' },
+  { label: 'Analytics',  path: '/analytics' },
   { label: 'Settings',   path: '/settings' },
 ];
 

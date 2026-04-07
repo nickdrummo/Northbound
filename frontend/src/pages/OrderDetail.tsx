@@ -180,11 +180,9 @@ export default function OrderDetail() {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {/* Order status badge */}
-          {!order.is_recurring && (
-            <span className={`${s.badge} ${STATUS_BADGE[orderStatus]}`}>
-              {STATUS_LABELS[orderStatus]}
-            </span>
-          )}
+          <span className={`${s.badge} ${STATUS_BADGE[orderStatus]}`}>
+            {STATUS_LABELS[orderStatus]}
+          </span>
           <a
             href={`${API_URL}/orders/${order.id}/xml`}
             target="_blank"
@@ -208,7 +206,7 @@ export default function OrderDetail() {
       </div>
 
       {/* Seller: order fulfilment actions */}
-      {isSeller && !order.is_recurring && (
+      {isSeller && (
         <div className={s.card}>
           <p className={s.sectionHeading}>Order Fulfilment</p>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -235,12 +233,25 @@ export default function OrderDetail() {
                 Mark as Delivered
               </button>
             )}
-            {orderStatus === 'delivered' && (
+            {orderStatus === 'delivered' && !order.is_recurring && (
               <span style={{ fontSize: '0.875rem', color: '#15803d', fontWeight: 600 }}>
                 ✓ Order complete
               </span>
             )}
+            {orderStatus === 'delivered' && order.is_recurring && (
+              <button
+                className={s.btnPrimary}
+                onClick={() => updateStatus(order.id, 'shipped')}
+              >
+                Dispatch Next Occurrence
+              </button>
+            )}
           </div>
+          {order.is_recurring && (
+            <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 10 }}>
+              Recurring order — status resets each time a new occurrence is dispatched.
+            </p>
+          )}
         </div>
       )}
 

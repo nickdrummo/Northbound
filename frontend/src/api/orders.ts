@@ -27,6 +27,20 @@ export interface OrderInput {
   order_lines: OrderLine[];
 }
 
+export type RecurringFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
+
+export interface RecurringOrderInput {
+  buyer: Party;
+  seller: Party;
+  currency: string;
+  order_note?: string;
+  order_lines: OrderLine[];
+  frequency: RecurringFrequency;
+  recur_interval: number;
+  recur_start_date: string;
+  recur_end_date?: string;
+}
+
 export interface Order {
   id: string;
   buyer_id: string;
@@ -102,6 +116,22 @@ export async function createOrder(input: OrderInput): Promise<{ orderID: string 
   }
   const json: ApiResponse<{ orderID: string }> = await res.json();
   return json.data;
+}
+
+export async function createRecurringOrder(input: RecurringOrderInput): Promise<{ orderID: string }> {
+  const res = await fetch(`${API_URL}/orders/recurring`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const detail = err?.error?.validationErrors?.map((e: { field: string; message: string }) => e.message).join(', ');
+    throw new Error(detail ?? err?.error?.message ?? err?.message ?? `Failed to create recurring order: ${res.status}`);
+  }
+  // Backend returns the full RecurringOrder object (with `id`), not { orderID }
+  const json: ApiResponse<{ id: string }> = await res.json();
+  return { orderID: json.data.id };
 }
 
 /** Full replacement update — same body shape as createOrder. */

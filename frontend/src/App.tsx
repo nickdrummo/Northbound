@@ -20,6 +20,7 @@ import EditTemplate from './pages/EditTemplate';
 import Settings from './pages/Settings';
 import ReceivedOrders from './pages/ReceivedOrders';
 import EditOrder from './pages/EditOrder';
+import Analytics from './pages/Analytics';
 
 function ProtectedLayout() {
   return (
@@ -53,6 +54,7 @@ function App() {
             <Route path="/templates" element={<Templates />} />
             <Route path="/templates/new" element={<CreateTemplate />} />
             <Route path="/templates/:id/edit" element={<EditTemplate />} />
+            <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>
