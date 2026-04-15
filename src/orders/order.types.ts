@@ -124,3 +124,40 @@ export interface PartySession {
     order_lines: OrderLine[];
   }>;
 }
+
+
+export interface InvoiceInput {
+  order_id: string;          // reference to the originating order
+  issue_date?: string;       // defaults to today if omitted
+  invoice_note?: string;
+  tax_rate?: number;         // e.g. 0.1 for 10% GST, defaults to 0
+}
+
+export interface InvoiceLine {
+  line_id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  unit_code: string;
+  line_total: number;        // quantity * unit_price (pre-calculated)
+}
+
+export interface InvoiceTotals {
+  line_extension_amount: number;   // sum of all line_totals (pre-tax)
+  tax_amount: number;              // line_extension_amount * tax_rate
+  tax_inclusive_amount: number;    // line_extension_amount + tax_amount
+  payable_amount: number;          // final amount due
+}
+
+export interface InvoiceResult {
+  invoice_id: string;
+  order_id: string;
+  issue_date: string;
+  currency: string;
+  buyer: Party;
+  seller: Party;
+  invoice_lines: InvoiceLine[];
+  totals: InvoiceTotals;
+  invoice_note?: string;
+  ubl_xml: string;
+}
