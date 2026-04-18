@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '../context/AuthContext';
+import { LANGUAGES, LanguageCode, useLanguage } from '../context/LanguageContext';
 import { usePreferences } from '../hooks/usePreferences';
 import s from '../styles/shared.module.css';
 
@@ -10,6 +11,7 @@ export default function Settings() {
   const { userID, email, role, setRole, logout } = useAuth();
   const navigate = useNavigate();
   const { prefs, updatePreferences } = usePreferences();
+  const { language, setLanguage, t } = useLanguage();
 
   const [pendingRole, setPendingRole] = useState<UserRole>(role ?? 'buyer');
   const [roleSaved, setRoleSaved]     = useState(false);
@@ -29,14 +31,14 @@ export default function Settings() {
     <div className={s.page}>
       <div className={s.pageHeader}>
         <div>
-          <h1 className={s.pageTitle}>Settings</h1>
-          <p className={s.pageSubtitle}>Account and platform preferences</p>
+          <h1 className={s.pageTitle}>{t('settings.title')}</h1>
+          <p className={s.pageSubtitle}>{t('settings.subtitle')}</p>
         </div>
       </div>
 
       {/* Account section */}
       <div className={s.card}>
-        <p className={s.sectionHeading}>Account</p>
+        <p className={s.sectionHeading}>{t('settings.account')}</p>
         <div className={s.detailGrid}>
           <div className={s.detailItem}>
             <span className={s.detailLabel}>User ID</span>
@@ -53,14 +55,14 @@ export default function Settings() {
         </div>
         <div style={{ marginTop: 20 }}>
           <button className={s.btnDanger} onClick={handleLogout}>
-            Log Out
+            {t('common.logout')}
           </button>
         </div>
       </div>
 
       {/* Party ID — read-only, derived from email */}
       <div className={s.card}>
-        <p className={s.sectionHeading}>Party Identity</p>
+        <p className={s.sectionHeading}>{t('settings.partyIdentity')}</p>
         <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
           Your party ID is automatically set to your email address and cannot be changed.
           {role === 'seller' && (
@@ -92,7 +94,7 @@ export default function Settings() {
 
       {/* Role selector */}
       <div className={s.card}>
-        <p className={s.sectionHeading}>Role</p>
+        <p className={s.sectionHeading}>{t('settings.role')}</p>
         <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 18 }}>
           Your role determines what you can do in Northbound. Buyers create orders; sellers receive and fulfil them.
         </p>
@@ -135,7 +137,7 @@ export default function Settings() {
 
       {/* Preferences section */}
       <div className={s.card}>
-        <p className={s.sectionHeading}>Preferences</p>
+        <p className={s.sectionHeading}>{t('settings.preferences')}</p>
         <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
           These preferences are saved locally and used to pre-fill forms throughout the app.
         </p>
@@ -151,6 +153,19 @@ export default function Settings() {
               ))}
             </select>
           </div>
+          <div className={s.formField}>
+            <label>{t('settings.language')}</label>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as LanguageCode)}
+            >
+              {LANGUAGES.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.flag} {lang.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <p style={{ marginTop: 12, fontSize: '0.78rem', color: '#94a3b8' }}>
           Saved instantly — no need to click Save.
@@ -159,7 +174,7 @@ export default function Settings() {
 
       {/* Platform section */}
       <div className={s.card}>
-        <p className={s.sectionHeading}>Platform</p>
+        <p className={s.sectionHeading}>{t('settings.platform')}</p>
         <div className={s.detailGrid}>
           <div className={s.detailItem}>
             <span className={s.detailLabel}>Application</span>

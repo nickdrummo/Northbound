@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import SummaryCard from '../components/dashboard/SummaryCard';
 import { useMyOrders } from '../hooks/useMyOrders';
 import { useOrderStatus } from '../hooks/useOrderStatus';
@@ -10,6 +11,7 @@ import styles from './Dashboard.module.css';
 function Dashboard() {
   const navigate = useNavigate();
   const { role, externalId } = useAuth();
+  const { t } = useLanguage();
   const { orders, loading, error } = useMyOrders();
   const { getStatus } = useOrderStatus();
 
@@ -47,11 +49,9 @@ function Dashboard() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1 className={styles.title}>Dashboard</h1>
+        <h1 className={styles.title}>{t('dashboard.title')}</h1>
         <p className={styles.subtitle}>
-          {isSeller
-            ? 'Seller overview — track the orders coming in from your buyers'
-            : 'Purchase order management for your business'}
+          {isSeller ? t('dashboard.subtitle.seller') : t('dashboard.subtitle.buyer')}
         </p>
       </div>
 
@@ -59,10 +59,10 @@ function Dashboard() {
       {!role && (
         <div style={{ background: '#fff8f0', border: '1px solid #fed7aa', borderRadius: 10, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ color: '#9a3412', fontSize: '0.875rem', margin: 0 }}>
-            Complete your profile to unlock buyer/seller features.
+            {t('dashboard.completeProfilePrompt')}
           </p>
           <button className={styles.btn} style={{ background: '#ea580c', flexShrink: 0 }} onClick={() => navigate('/settings')}>
-            Set up profile
+            {t('dashboard.setUpProfile')}
           </button>
         </div>
       )}
@@ -71,21 +71,21 @@ function Dashboard() {
       <section className={styles.section}>
         <div className={styles.summaryGrid}>
           <SummaryCard
-            label={isSeller ? 'Orders Received' : 'Total Orders'}
+            label={isSeller ? t('dashboard.ordersReceived') : t('dashboard.totalOrders')}
             value={reportLoading ? '…' : (report?.order_count ?? (loading ? '…' : totalOrders))}
           />
           <SummaryCard
-            label={isSeller ? 'Total Revenue' : 'Total Spend'}
+            label={isSeller ? t('dashboard.totalRevenue') : t('dashboard.totalSpend')}
             value={reportLoading ? '…' : totalValue}
           />
           <SummaryCard
-            label="Pending Orders"
+            label={t('dashboard.pendingOrders')}
             value={loading ? '…' : pendingCount}
           />
           {isSeller ? (
-            <SummaryCard label="Orders Shipped" value={loading ? '…' : shippedCount} />
+            <SummaryCard label={t('dashboard.ordersShipped')} value={loading ? '…' : shippedCount} />
           ) : (
-            <SummaryCard label="Recurring Templates" value={loading ? '…' : recurringTemplates} />
+            <SummaryCard label={t('dashboard.recurringTemplates')} value={loading ? '…' : recurringTemplates} />
           )}
         </div>
       </section>
@@ -93,7 +93,7 @@ function Dashboard() {
       {/* Recent orders table */}
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>
-          {isSeller ? 'Recent Received Orders' : 'Recent Orders'}
+          {isSeller ? t('dashboard.recentReceivedOrders') : t('dashboard.recentOrders')}
         </h2>
         {error && <p className={styles.error}>Could not load orders: {error}</p>}
         {!error && (
@@ -152,13 +152,13 @@ function Dashboard() {
       {/* Quick Actions — buyers only */}
       {!isSeller && (
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Quick Actions</h2>
+          <h2 className={styles.sectionTitle}>{t('dashboard.quickActions')}</h2>
           <div className={styles.actionsRow}>
             <button className={styles.btn} onClick={() => navigate('/orders/new')}>
-              Create Order
+              {t('dashboard.createOrder')}
             </button>
             <button className={styles.btn} onClick={() => navigate('/templates/new')}>
-              New Template
+              {t('dashboard.newTemplate')}
             </button>
           </div>
         </section>
@@ -167,10 +167,10 @@ function Dashboard() {
       {/* Seller quick actions */}
       {isSeller && (
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Quick Actions</h2>
+          <h2 className={styles.sectionTitle}>{t('dashboard.quickActions')}</h2>
           <div className={styles.actionsRow}>
             <button className={styles.btn} onClick={() => navigate('/received-orders')}>
-              View All Received Orders
+              {t('dashboard.viewAllReceived')}
             </button>
           </div>
         </section>
