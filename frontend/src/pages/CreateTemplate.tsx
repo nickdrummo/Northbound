@@ -11,6 +11,36 @@ const EMPTY_PARTY: Party = {
 
 const FREQUENCIES: RecurringFrequency[] = ['DAILY', 'WEEKLY', 'MONTHLY'];
 
+// Defined OUTSIDE CreateTemplate so each render references the same component
+// type — otherwise React remounts the inputs on every keystroke and steals focus.
+interface PartySectionProps {
+  which: 'buyer' | 'seller';
+  data: Party;
+  onChange: (field: keyof Party, value: string) => void;
+}
+
+function PartySection({ which, data, onChange }: PartySectionProps) {
+  return (
+    <div className={s.card}>
+      <p className={s.sectionHeading}>{which === 'buyer' ? 'Buyer (Your Organisation)' : 'Seller (Supplier)'}</p>
+      <div className={s.formGrid}>
+        {(['external_id', 'name', 'email', 'street', 'city', 'country', 'postal_code'] as (keyof Party)[]).map((field) => (
+          <div className={s.formField} key={field}>
+            <label className={field === 'external_id' || field === 'name' ? s.required : ''}>
+              {field.replace('_', ' ')}
+            </label>
+            <input
+              value={data[field] ?? ''}
+              required={field === 'external_id' || field === 'name'}
+              onChange={(e) => onChange(field, e.target.value)}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function CreateTemplate() {
   const navigate = useNavigate();
 
@@ -66,29 +96,6 @@ export default function CreateTemplate() {
     }
   }
 
-  function PartySection({ which }: { which: 'buyer' | 'seller' }) {
-    const data = which === 'buyer' ? buyer : seller;
-    return (
-      <div className={s.card}>
-        <p className={s.sectionHeading}>{which === 'buyer' ? 'Buyer (Your Organisation)' : 'Seller (Supplier)'}</p>
-        <div className={s.formGrid}>
-          {(['external_id', 'name', 'email', 'street', 'city', 'country', 'postal_code'] as (keyof Party)[]).map((field) => (
-            <div className={s.formField} key={field}>
-              <label className={field === 'external_id' || field === 'name' ? s.required : ''}>
-                {field.replace('_', ' ')}
-              </label>
-              <input
-                value={data[field] ?? ''}
-                required={field === 'external_id' || field === 'name'}
-                onChange={(e) => updateParty(which, field, e.target.value)}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <form className={s.page} onSubmit={handleSubmit}>
       <div className={s.pageHeader}>
@@ -100,8 +107,16 @@ export default function CreateTemplate() {
         </div>
       </div>
 
-      <PartySection which="buyer" />
-      <PartySection which="seller" />
+      <PartySection
+        which="buyer"
+        data={buyer}
+        onChange={(field, value) => updateParty('buyer', field, value)}
+      />
+      <PartySection
+        which="seller"
+        data={seller}
+        onChange={(field, value) => updateParty('seller', field, value)}
+      />
 
       <div className={s.card}>
         <p className={s.sectionHeading}>Recurrence Settings</p>
