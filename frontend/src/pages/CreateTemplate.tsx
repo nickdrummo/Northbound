@@ -6,6 +6,7 @@ import { Party, OrderLine } from '../api/orders';
 import { getDefaultCurrency } from '../hooks/usePreferences';
 import { useSavedSellers } from '../hooks/useSavedSellers';
 import { loadBuyerProfile } from '../hooks/useBuyerProfile';
+import { useTemplateNames } from '../hooks/useTemplateNames';
 import s from '../styles/shared.module.css';
 
 const EMPTY_PARTY: Party = {
@@ -48,7 +49,9 @@ export default function CreateTemplate() {
   const navigate = useNavigate();
   const { externalId, role } = useAuth();
   const { sellers: savedSellers, saveSeller, removeSeller } = useSavedSellers();
+  const { setTemplateName } = useTemplateNames();
   const [selectedSavedSellerId, setSelectedSavedSellerId] = useState('');
+  const [templateName, setTemplateNameInput] = useState('');
 
   // Pre-fill the buyer section from the saved buyer profile (if any).
   const [buyer, setBuyer] = useState<Party>(() => {
@@ -123,8 +126,11 @@ export default function CreateTemplate() {
     setSubmitting(true);
     setError(null);
     try {
-      await createRecurringOrder(input);
+      const created = await createRecurringOrder(input);
       saveSeller(seller);
+      if (templateName.trim()) {
+        setTemplateName(created.id, templateName);
+      }
       navigate('/templates');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create template.');
@@ -140,6 +146,22 @@ export default function CreateTemplate() {
             ← Back to Templates
           </button>
           <h1 className={s.pageTitle} style={{ marginTop: 6 }}>New Recurring Template</h1>
+        </div>
+      </div>
+
+      <div className={s.card}>
+        <p className={s.sectionHeading}>Template Name</p>
+        <div className={s.formField} style={{ marginBottom: 0 }}>
+          <label className={s.required}>Name</label>
+          <input
+            value={templateName}
+            required
+            onChange={(e) => setTemplateNameInput(e.target.value)}
+            placeholder="e.g. Monthly office supplies"
+          />
+          <p style={{ marginTop: 6, fontSize: '0.78rem', color: '#94a3b8' }}>
+            Used to identify this template in lists and dropdowns.
+          </p>
         </div>
       </div>
 

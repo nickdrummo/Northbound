@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../hooks/useOrders';
+import { useTemplateNames } from '../hooks/useTemplateNames';
 import { deleteRecurringOrder } from '../api/recurring';
 import s from '../styles/shared.module.css';
 
 export default function Templates() {
   const { orders, loading, error, refetch } = useOrders();
+  const { getName, removeTemplateName } = useTemplateNames();
   const navigate = useNavigate();
 
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -20,6 +22,7 @@ export default function Templates() {
     setDeleteError(null);
     try {
       await deleteRecurringOrder(deleteTarget);
+      removeTemplateName(deleteTarget);
       setDeleteTarget(null);
       refetch();
     } catch (err) {
@@ -53,7 +56,7 @@ export default function Templates() {
       <table className={s.table}>
         <thead>
           <tr>
-            <th>ID</th>
+            <th>Name</th>
             <th>Currency</th>
             <th>Frequency</th>
             <th>Interval</th>
@@ -70,7 +73,7 @@ export default function Templates() {
           ) : (
             templates.map((t) => (
               <tr key={t.id}>
-                <td className={s.mono}>{t.id}</td>
+                <td title={t.id} style={{ fontWeight: 600, color: '#0f172a' }}>{getName(t.id)}</td>
                 <td>{t.currency}</td>
                 <td>
                   <span className={`${s.badge} ${FREQ_BADGE[t.frequency ?? ''] ?? s.badgeBlue}`}>
@@ -109,7 +112,7 @@ export default function Templates() {
           <div className={s.dialog}>
             <p className={s.dialogTitle}>Delete this template?</p>
             <p className={s.dialogBody}>
-              Template <strong className={s.mono}>{deleteTarget}</strong> will be permanently deleted.
+              Template <strong>{getName(deleteTarget)}</strong> will be permanently deleted.
               This cannot be undone.
             </p>
             <div className={s.dialogActions}>

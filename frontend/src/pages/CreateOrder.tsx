@@ -8,6 +8,7 @@ import {
 import { getDefaultCurrency } from '../hooks/usePreferences';
 import { useSavedSellers } from '../hooks/useSavedSellers';
 import { loadBuyerProfile } from '../hooks/useBuyerProfile';
+import { useTemplateNames } from '../hooks/useTemplateNames';
 import s from '../styles/shared.module.css';
 
 const EMPTY_PARTY: Party = {
@@ -95,6 +96,7 @@ export default function CreateOrder() {
   const navigate = useNavigate();
   const { role, externalId } = useAuth();
   const { sellers: savedSellers, saveSeller, removeSeller } = useSavedSellers();
+  const { getName: getTemplateName } = useTemplateNames();
   const [selectedSavedSellerId, setSelectedSavedSellerId] = useState('');
 
   // Buyer external_id is always locked to the user's profile ID so orders stay discoverable
@@ -330,9 +332,8 @@ export default function CreateOrder() {
                 <option value="">— Select a template —</option>
                 {templates.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.frequency} · every {t.recur_interval} · {t.currency}
+                    {getTemplateName(t.id)} · {t.frequency} · every {t.recur_interval} · {t.currency}
                     {t.recur_end_date ? ` · ends ${t.recur_end_date}` : ' · ongoing'}
-                    {' · '}{t.id.slice(0, 8)}…
                   </option>
                 ))}
               </select>

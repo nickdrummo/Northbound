@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { updateRecurringOrder, RecurringFrequency } from '../api/recurring';
 import { useOrder } from '../hooks/useOrder';
+import { useTemplateNames, loadTemplateName } from '../hooks/useTemplateNames';
 import s from '../styles/shared.module.css';
 
 const FREQUENCIES: RecurringFrequency[] = ['DAILY', 'WEEKLY', 'MONTHLY'];
@@ -10,7 +11,9 @@ export default function EditTemplate() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { order, loading, error: loadError } = useOrder(id!);
+  const { setTemplateName } = useTemplateNames();
 
+  const [templateName, setTemplateNameInput] = useState(() => loadTemplateName(id!) ?? '');
   const [frequency, setFrequency] = useState<RecurringFrequency>('MONTHLY');
   const [interval, setInterval] = useState(1);
   const [startDate, setStartDate] = useState('');
@@ -48,6 +51,7 @@ export default function EditTemplate() {
         currency,
         order_note: note || undefined,
       });
+      setTemplateName(id!, templateName);
       navigate('/templates');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update template.');
@@ -82,8 +86,24 @@ export default function EditTemplate() {
             ← Back to Templates
           </button>
           <h1 className={s.pageTitle} style={{ marginTop: 6 }}>
-            Edit Template <span className={s.mono} style={{ fontSize: '0.85em', color: '#718096' }}>{id}</span>
+            Edit Template
+            {templateName && <span style={{ color: '#64748b', fontWeight: 500 }}> · {templateName}</span>}
           </h1>
+        </div>
+      </div>
+
+      <div className={s.card}>
+        <p className={s.sectionHeading}>Template Name</p>
+        <div className={s.formField} style={{ marginBottom: 0 }}>
+          <label>Name</label>
+          <input
+            value={templateName}
+            onChange={(e) => setTemplateNameInput(e.target.value)}
+            placeholder="e.g. Monthly office supplies"
+          />
+          <p style={{ marginTop: 6, fontSize: '0.78rem', color: '#94a3b8' }}>
+            Used to identify this template in lists and dropdowns. Leave blank to use a shortened ID.
+          </p>
         </div>
       </div>
 
