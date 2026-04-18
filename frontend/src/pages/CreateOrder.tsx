@@ -6,6 +6,7 @@ import {
   OrderInput, RecurringOrderInput, RecurringFrequency, OrderLine, Party, Order,
 } from '../api/orders';
 import { getDefaultCurrency } from '../hooks/usePreferences';
+import { useSavedSellers } from '../hooks/useSavedSellers';
 import s from '../styles/shared.module.css';
 
 const EMPTY_PARTY: Party = {
@@ -92,6 +93,8 @@ function PartySection({ label, data, onChange, lockExternalId }: PartySectionPro
 export default function CreateOrder() {
   const navigate = useNavigate();
   const { role, externalId } = useAuth();
+  const { sellers: savedSellers, saveSeller, removeSeller } = useSavedSellers();
+  const [selectedSavedSellerId, setSelectedSavedSellerId] = useState('');
 
   // Buyer external_id is always locked to the user's profile ID so orders stay discoverable
   const lockedBuyerId = (role === 'buyer' && externalId) ? externalId : '';
@@ -154,6 +157,23 @@ export default function CreateOrder() {
 
   function updateSeller(field: keyof Party, value: string) {
     setSeller((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function applySavedSeller(externalIdValue: string) {
+    setSelectedSavedSellerId(externalIdValue);
+    if (!externalIdValue) return;
+    const found = savedSellers.find((s) => s.external_id === externalIdValue);
+    if (!found) return;
+    // Copy only the Party fields — `savedAt` is bookkeeping, not part of the payload
+    setSeller({
+      external_id: found.external_id,
+      name:        found.name,
+      email:       found.email ?? '',
+      street:      found.street ?? '',
+      city:        found.city ?? '',
+      country:     found.country ?? '',
+      postal_code: found.postal_code ?? '',
+    });
   }
 
   function updateLine(index: number, field: keyof typeof EMPTY_LINE, value: string | number) {
@@ -256,6 +276,8 @@ export default function CreateOrder() {
         };
         result = await createOrder(input);
       }
+      // Remember this seller for next time so it appears in the autofill dropdown
+      saveSeller(sharedFields.seller);
       navigate(`/orders/${result.orderID}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create order.');
@@ -323,6 +345,47 @@ export default function CreateOrder() {
       </div>
 
       <PartySection label="Buyer (Your Organisation)" data={buyer} onChange={updateBuyer} lockExternalId={!!lockedBuyerId} />
+
+      {/* Saved seller picker — lets users re-use suppliers from previous orders */}
+      {savedSellers.length > 0 && (
+        <div className={s.card}>
+          <p className={s.sectionHeading}>Load a Saved Supplier</p>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className={s.formField} style={{ flex: '1 1 280px', minWidth: 200, marginBottom: 0 }}>
+              <label>Saved Suppliers</label>
+              <select
+                value={selectedSavedSellerId}
+                onChange={(e) => applySavedSeller(e.target.value)}
+              >
+                <option value="">— Select a saved supplier —</option>
+                {savedSellers.map((sv) => (
+                  <option key={sv.external_id} value={sv.external_id}>
+                    {sv.name} · {sv.external_id}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedSavedSellerId && (
+              <button
+                type="button"
+                className={s.btnSecondary}
+                onClick={() => {
+                  removeSeller(selectedSavedSellerId);
+                  setSelectedSavedSellerId('');
+                }}
+                style={{ marginBottom: 1 }}
+                title="Forget this supplier"
+              >
+                Forget
+              </button>
+            )}
+          </div>
+          <p style={{ marginTop: 10, fontSize: '0.78rem', color: '#94a3b8' }}>
+            Selecting a supplier pre-fills the seller fields below. You can still edit them.
+          </p>
+        </div>
+      )}
+
       <PartySection label="Seller (Supplier)" data={seller} onChange={updateSeller} />
 
       {/* Order details */}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { createRecurringOrder, RecurringFrequency, RecurringOrderInput } from '../api/recurring';
 import { Party, OrderLine } from '../api/orders';
 import { getDefaultCurrency } from '../hooks/usePreferences';
+import { useSavedSellers } from '../hooks/useSavedSellers';
 import s from '../styles/shared.module.css';
 
 const EMPTY_PARTY: Party = {
@@ -43,6 +44,8 @@ function PartySection({ which, data, onChange }: PartySectionProps) {
 
 export default function CreateTemplate() {
   const navigate = useNavigate();
+  const { sellers: savedSellers, saveSeller, removeSeller } = useSavedSellers();
+  const [selectedSavedSellerId, setSelectedSavedSellerId] = useState('');
 
   const [buyer, setBuyer] = useState<Party>({ ...EMPTY_PARTY });
   const [seller, setSeller] = useState<Party>({ ...EMPTY_PARTY });
@@ -60,6 +63,22 @@ export default function CreateTemplate() {
 
   function updateParty(which: 'buyer' | 'seller', field: keyof Party, value: string) {
     (which === 'buyer' ? setBuyer : setSeller)((p) => ({ ...p, [field]: value }));
+  }
+
+  function applySavedSeller(externalIdValue: string) {
+    setSelectedSavedSellerId(externalIdValue);
+    if (!externalIdValue) return;
+    const found = savedSellers.find((sv) => sv.external_id === externalIdValue);
+    if (!found) return;
+    setSeller({
+      external_id: found.external_id,
+      name:        found.name,
+      email:       found.email ?? '',
+      street:      found.street ?? '',
+      city:        found.city ?? '',
+      country:     found.country ?? '',
+      postal_code: found.postal_code ?? '',
+    });
   }
 
   function updateLine(i: number, field: string, value: string | number) {
@@ -89,6 +108,7 @@ export default function CreateTemplate() {
     setError(null);
     try {
       await createRecurringOrder(input);
+      saveSeller(seller);
       navigate('/templates');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create template.');
@@ -112,6 +132,47 @@ export default function CreateTemplate() {
         data={buyer}
         onChange={(field, value) => updateParty('buyer', field, value)}
       />
+
+      {/* Saved seller picker — lets users re-use suppliers from previous orders */}
+      {savedSellers.length > 0 && (
+        <div className={s.card}>
+          <p className={s.sectionHeading}>Load a Saved Supplier</p>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className={s.formField} style={{ flex: '1 1 280px', minWidth: 200, marginBottom: 0 }}>
+              <label>Saved Suppliers</label>
+              <select
+                value={selectedSavedSellerId}
+                onChange={(e) => applySavedSeller(e.target.value)}
+              >
+                <option value="">— Select a saved supplier —</option>
+                {savedSellers.map((sv) => (
+                  <option key={sv.external_id} value={sv.external_id}>
+                    {sv.name} · {sv.external_id}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedSavedSellerId && (
+              <button
+                type="button"
+                className={s.btnSecondary}
+                onClick={() => {
+                  removeSeller(selectedSavedSellerId);
+                  setSelectedSavedSellerId('');
+                }}
+                style={{ marginBottom: 1 }}
+                title="Forget this supplier"
+              >
+                Forget
+              </button>
+            )}
+          </div>
+          <p style={{ marginTop: 10, fontSize: '0.78rem', color: '#94a3b8' }}>
+            Selecting a supplier pre-fills the seller fields below. You can still edit them.
+          </p>
+        </div>
+      )}
+
       <PartySection
         which="seller"
         data={seller}
