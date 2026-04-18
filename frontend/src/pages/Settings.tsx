@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '../context/AuthContext';
 import { LANGUAGES, LanguageCode, useLanguage } from '../context/LanguageContext';
 import { usePreferences } from '../hooks/usePreferences';
+import { useBuyerProfile } from '../hooks/useBuyerProfile';
 import s from '../styles/shared.module.css';
 
 const CURRENCIES = ['AUD', 'USD', 'GBP', 'EUR', 'NZD', 'CAD', 'SGD', 'JPY'];
@@ -12,6 +13,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const { prefs, updatePreferences } = usePreferences();
   const { language, setLanguage, t } = useLanguage();
+  const { profile, updateProfile } = useBuyerProfile();
 
   const [pendingRole, setPendingRole] = useState<UserRole>(role ?? 'buyer');
   const [roleSaved, setRoleSaved]     = useState(false);
@@ -134,6 +136,67 @@ export default function Settings() {
           </span>
         )}
       </div>
+
+      {/* Buyer profile — used to auto-fill the buyer section on Create Order / Template */}
+      {role !== 'seller' && (
+        <div className={s.card}>
+          <p className={s.sectionHeading}>{t('settings.buyerProfile')}</p>
+          <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
+            Saved locally and used to pre-fill the buyer section when creating an order or template.
+          </p>
+          <div className={s.formGrid}>
+            <div className={s.formField}>
+              <label>Organisation Name</label>
+              <input
+                value={profile.name}
+                onChange={(e) => updateProfile({ name: e.target.value })}
+                placeholder="e.g. Acme Pty Ltd"
+              />
+            </div>
+            <div className={s.formField}>
+              <label>Contact Email</label>
+              <input
+                type="email"
+                value={profile.email}
+                onChange={(e) => updateProfile({ email: e.target.value })}
+                placeholder="contact@example.com"
+              />
+            </div>
+            <div className={s.formField}>
+              <label>Street</label>
+              <input
+                value={profile.street}
+                onChange={(e) => updateProfile({ street: e.target.value })}
+              />
+            </div>
+            <div className={s.formField}>
+              <label>City</label>
+              <input
+                value={profile.city}
+                onChange={(e) => updateProfile({ city: e.target.value })}
+              />
+            </div>
+            <div className={s.formField}>
+              <label>Country</label>
+              <input
+                value={profile.country}
+                onChange={(e) => updateProfile({ country: e.target.value })}
+                placeholder="e.g. AU"
+              />
+            </div>
+            <div className={s.formField}>
+              <label>Postal Code</label>
+              <input
+                value={profile.postal_code}
+                onChange={(e) => updateProfile({ postal_code: e.target.value })}
+              />
+            </div>
+          </div>
+          <p style={{ marginTop: 12, fontSize: '0.78rem', color: '#94a3b8' }}>
+            Saved instantly — no need to click Save.
+          </p>
+        </div>
+      )}
 
       {/* Preferences section */}
       <div className={s.card}>

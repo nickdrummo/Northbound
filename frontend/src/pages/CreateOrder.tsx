@@ -7,6 +7,7 @@ import {
 } from '../api/orders';
 import { getDefaultCurrency } from '../hooks/usePreferences';
 import { useSavedSellers } from '../hooks/useSavedSellers';
+import { loadBuyerProfile } from '../hooks/useBuyerProfile';
 import s from '../styles/shared.module.css';
 
 const EMPTY_PARTY: Party = {
@@ -99,9 +100,19 @@ export default function CreateOrder() {
   // Buyer external_id is always locked to the user's profile ID so orders stay discoverable
   const lockedBuyerId = (role === 'buyer' && externalId) ? externalId : '';
 
-  const [buyer, setBuyer] = useState<Party>({
-    ...EMPTY_PARTY,
-    external_id: lockedBuyerId,
+  // Pre-fill the buyer section from the saved buyer profile (if any).
+  // external_id is still locked to the authenticated user's email when present.
+  const [buyer, setBuyer] = useState<Party>(() => {
+    const saved = loadBuyerProfile();
+    return {
+      external_id: lockedBuyerId,
+      name:        saved.name,
+      email:       saved.email,
+      street:      saved.street,
+      city:        saved.city,
+      country:     saved.country,
+      postal_code: saved.postal_code,
+    };
   });
   const [seller, setSeller]   = useState<Party>({ ...EMPTY_PARTY });
   const [currency, setCurrency] = useState(getDefaultCurrency);

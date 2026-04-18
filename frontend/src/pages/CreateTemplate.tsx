@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { createRecurringOrder, RecurringFrequency, RecurringOrderInput } from '../api/recurring';
 import { Party, OrderLine } from '../api/orders';
 import { getDefaultCurrency } from '../hooks/usePreferences';
 import { useSavedSellers } from '../hooks/useSavedSellers';
+import { loadBuyerProfile } from '../hooks/useBuyerProfile';
 import s from '../styles/shared.module.css';
 
 const EMPTY_PARTY: Party = {
@@ -44,10 +46,24 @@ function PartySection({ which, data, onChange }: PartySectionProps) {
 
 export default function CreateTemplate() {
   const navigate = useNavigate();
+  const { externalId, role } = useAuth();
   const { sellers: savedSellers, saveSeller, removeSeller } = useSavedSellers();
   const [selectedSavedSellerId, setSelectedSavedSellerId] = useState('');
 
-  const [buyer, setBuyer] = useState<Party>({ ...EMPTY_PARTY });
+  // Pre-fill the buyer section from the saved buyer profile (if any).
+  const [buyer, setBuyer] = useState<Party>(() => {
+    const saved = loadBuyerProfile();
+    const lockedBuyerId = (role === 'buyer' && externalId) ? externalId : '';
+    return {
+      external_id: lockedBuyerId,
+      name:        saved.name,
+      email:       saved.email,
+      street:      saved.street,
+      city:        saved.city,
+      country:     saved.country,
+      postal_code: saved.postal_code,
+    };
+  });
   const [seller, setSeller] = useState<Party>({ ...EMPTY_PARTY });
   const [currency, setCurrency] = useState(getDefaultCurrency);
   const [note, setNote] = useState('');
