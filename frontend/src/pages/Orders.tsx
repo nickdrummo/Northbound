@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useMyOrders } from '../hooks/useMyOrders';
 import { useOrderStatus, OrderStatus } from '../hooks/useOrderStatus';
+import { useOrderNames } from '../hooks/useOrderNames';
 import s from '../styles/shared.module.css';
 
 type Filter = 'all' | 'one-off' | 'recurring';
@@ -18,6 +19,7 @@ export default function Orders() {
   const { orders, loading, error } = useMyOrders();
   const { role, externalId } = useAuth();
   const { getStatus } = useOrderStatus();
+  const { getName: getOrderName } = useOrderNames();
   const { t } = useLanguage();
   const [filter, setFilter] = useState<Filter>('all');
   const navigate = useNavigate();
@@ -96,7 +98,7 @@ export default function Orders() {
                   onClick={() => navigate(`/orders/${order.id}`)}
                 >
                   <td className={s.mono} style={{ fontSize: '0.8rem' }}>
-                    {order.id.length > 20 ? `${order.id.slice(0, 18)}…` : order.id}
+                    {getOrderName(order.id)}
                   </td>
                   <td>{order.currency}</td>
                   <td>{order.issue_date}</td>

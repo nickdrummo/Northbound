@@ -5,6 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import SummaryCard from '../components/dashboard/SummaryCard';
 import { useMyOrders } from '../hooks/useMyOrders';
 import { useOrderStatus } from '../hooks/useOrderStatus';
+import { useOrderNames } from '../hooks/useOrderNames';
 import { fetchBuyerReport, fetchSellerReport, PartyReport } from '../api/parties';
 import styles from './Dashboard.module.css';
 
@@ -14,6 +15,7 @@ function Dashboard() {
   const { t } = useLanguage();
   const { orders, loading, error } = useMyOrders();
   const { getStatus } = useOrderStatus();
+  const { getName: getOrderName } = useOrderNames();
 
   const [report, setReport]         = useState<PartyReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -121,7 +123,7 @@ function Dashboard() {
                   const status = getStatus(order.id);
                   return (
                     <tr key={order.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/orders/${order.id}`)}>
-                      <td className={styles.mono}>{order.id.slice(0, 16)}…</td>
+                      <td className={styles.mono}>{getOrderName(order.id)}</td>
                       <td>{order.currency}</td>
                       <td>{order.issue_date}</td>
                       <td>

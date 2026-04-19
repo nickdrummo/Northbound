@@ -9,6 +9,7 @@ import { getDefaultCurrency } from '../hooks/usePreferences';
 import { useSavedSellers } from '../hooks/useSavedSellers';
 import { loadBuyerProfile } from '../hooks/useBuyerProfile';
 import { useTemplateNames } from '../hooks/useTemplateNames';
+import { useOrderNames } from '../hooks/useOrderNames';
 import s from '../styles/shared.module.css';
 
 const EMPTY_PARTY: Party = {
@@ -97,7 +98,11 @@ export default function CreateOrder() {
   const { role, externalId } = useAuth();
   const { sellers: savedSellers, saveSeller, removeSeller } = useSavedSellers();
   const { getName: getTemplateName } = useTemplateNames();
+  const { setOrderName } = useOrderNames();
   const [selectedSavedSellerId, setSelectedSavedSellerId] = useState('');
+
+  // Optional user-chosen name for this order (persisted locally after creation)
+  const [orderName, setOrderNameInput] = useState('');
 
   // Buyer external_id is always locked to the user's profile ID so orders stay discoverable
   const lockedBuyerId = (role === 'buyer' && externalId) ? externalId : '';
@@ -301,6 +306,8 @@ export default function CreateOrder() {
       }
       // Remember this seller for next time so it appears in the autofill dropdown
       saveSeller(sharedFields.seller);
+      // Persist the user-chosen order name (if any) so the list can show it
+      if (orderName.trim()) setOrderName(result.orderID, orderName);
       navigate(`/orders/${result.orderID}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create order.');
@@ -414,6 +421,19 @@ export default function CreateOrder() {
       <div className={s.card}>
         <p className={s.sectionHeading}>Order Details</p>
         <div className={s.formGrid}>
+          <div className={s.formField} style={{ gridColumn: '1 / -1' }}>
+            <label>
+              Order Name{' '}
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 400 }}>
+                (optional — a friendly label shown in your order list)
+              </span>
+            </label>
+            <input
+              value={orderName}
+              onChange={(e) => setOrderNameInput(e.target.value)}
+              placeholder="e.g. Q2 Office Supplies"
+            />
+          </div>
           <div className={s.formField}>
             <label className={s.required}>Currency</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)}>

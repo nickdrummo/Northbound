@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMyOrders } from '../hooks/useMyOrders';
 import { useOrderStatus, OrderStatus } from '../hooks/useOrderStatus';
+import { useOrderNames } from '../hooks/useOrderNames';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import s from '../styles/shared.module.css';
@@ -68,6 +69,7 @@ export default function Analytics() {
   const { role }  = useAuth();
   const { orders, loading, error } = useMyOrders();
   const { getStatus } = useOrderStatus();
+  const { getName: getOrderName } = useOrderNames();
   const { t } = useLanguage();
 
   const stats = useMemo(() => {
@@ -237,7 +239,7 @@ export default function Analytics() {
                       onClick={() => navigate(`/orders/${order.id}`)}
                     >
                       <td className={s.mono} style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                        {order.id.slice(0, 8)}…
+                        {getOrderName(order.id)}
                       </td>
                       <td style={{ fontSize: '0.82rem' }}>
                         {order.issue_date ?? order.recur_start_date ?? '—'}
