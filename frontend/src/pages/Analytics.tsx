@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMyOrders } from '../hooks/useMyOrders';
 import { useOrderStatus, OrderStatus } from '../hooks/useOrderStatus';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import s from '../styles/shared.module.css';
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -54,10 +55,10 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
   delivered: '#10b981',
 };
 
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending:   'Pending',
-  shipped:   'Shipped',
-  delivered: 'Delivered',
+const STATUS_KEYS: Record<OrderStatus, string> = {
+  pending:   'analytics.stat.pending',
+  shipped:   'analytics.stat.shipped',
+  delivered: 'analytics.stat.delivered',
 };
 
 // ── page ───────────────────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ export default function Analytics() {
   const { role }  = useAuth();
   const { orders, loading, error } = useMyOrders();
   const { getStatus } = useOrderStatus();
+  const { t } = useLanguage();
 
   const stats = useMemo(() => {
     const total     = orders.length;
@@ -101,7 +103,7 @@ export default function Analytics() {
     return { total, recurring, oneOff, statusCounts, currencyCounts, freqCounts, sortedMonths, recent };
   }, [orders, getStatus]);
 
-  if (loading) return <div className={s.page}><p className={s.loadingCell}>Loading analytics…</p></div>;
+  if (loading) return <div className={s.page}><p className={s.loadingCell}>{t('analytics.loading')}</p></div>;
   if (error)   return <div className={s.page}><p className={s.error}>{error}</p></div>;
 
   const maxMonth   = Math.max(...stats.sortedMonths.map(([, v]) => v), 1);
@@ -112,38 +114,38 @@ export default function Analytics() {
     <div className={s.page}>
       <div className={s.pageHeader}>
         <div>
-          <h1 className={s.pageTitle}>Analytics</h1>
+          <h1 className={s.pageTitle}>{t('analytics.title')}</h1>
           <p className={s.pageSubtitle}>
-            {role === 'seller' ? 'Summary of orders received' : 'Summary of your purchasing activity'}
+            {role === 'seller' ? t('analytics.subtitle.seller') : t('analytics.subtitle.buyer')}
           </p>
         </div>
       </div>
 
       {stats.total === 0 ? (
         <div className={s.card} style={{ textAlign: 'center', padding: '40px 24px' }}>
-          <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>No orders yet — analytics will appear here once you have orders.</p>
+          <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>{t('analytics.empty')}</p>
         </div>
       ) : (
         <>
           {/* ── Top stat cards ── */}
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <StatCard label="Total Orders"    value={stats.total} />
-            <StatCard label="One-off"         value={stats.oneOff}    color="#4361ee" />
-            <StatCard label="Recurring"       value={stats.recurring} color="#7c3aed" />
-            <StatCard label="Pending"         value={stats.statusCounts['pending']   ?? 0} color="#f59e0b" />
-            <StatCard label="Shipped"         value={stats.statusCounts['shipped']   ?? 0} color="#4361ee" />
-            <StatCard label="Delivered"       value={stats.statusCounts['delivered'] ?? 0} color="#10b981" />
+            <StatCard label={t('analytics.stat.totalOrders')} value={stats.total} />
+            <StatCard label={t('analytics.stat.oneOff')}      value={stats.oneOff}    color="#4361ee" />
+            <StatCard label={t('analytics.stat.recurring')}   value={stats.recurring} color="#7c3aed" />
+            <StatCard label={t('analytics.stat.pending')}     value={stats.statusCounts['pending']   ?? 0} color="#f59e0b" />
+            <StatCard label={t('analytics.stat.shipped')}     value={stats.statusCounts['shipped']   ?? 0} color="#4361ee" />
+            <StatCard label={t('analytics.stat.delivered')}   value={stats.statusCounts['delivered'] ?? 0} color="#10b981" />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
             {/* ── Orders by status ── */}
             <div className={s.card}>
-              <p className={s.sectionHeading}>Orders by Status</p>
+              <p className={s.sectionHeading}>{t('analytics.byStatus')}</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {(['pending', 'shipped', 'delivered'] as OrderStatus[]).map((status) => (
                   <div key={status}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>{STATUS_LABELS[status]}</span>
+                      <span style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>{t(STATUS_KEYS[status])}</span>
                     </div>
                     <Bar value={stats.statusCounts[status] ?? 0} max={maxStatus} color={STATUS_COLORS[status]} />
                   </div>
@@ -153,7 +155,7 @@ export default function Analytics() {
 
             {/* ── Orders by currency ── */}
             <div className={s.card}>
-              <p className={s.sectionHeading}>Orders by Currency</p>
+              <p className={s.sectionHeading}>{t('analytics.byCurrency')}</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {Object.entries(stats.currencyCounts)
                   .sort(([, a], [, b]) => b - a)
@@ -171,7 +173,7 @@ export default function Analytics() {
             {/* ── Recurring frequency breakdown (only shown if there are recurring orders) ── */}
             {stats.recurring > 0 && (
               <div className={s.card}>
-                <p className={s.sectionHeading}>Recurring Frequency</p>
+                <p className={s.sectionHeading}>{t('analytics.recurringFrequency')}</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {Object.entries(stats.freqCounts)
                     .sort(([, a], [, b]) => b - a)
@@ -179,14 +181,16 @@ export default function Analytics() {
                       <div key={freq}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                           <span style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>
-                            {freq.charAt(0) + freq.slice(1).toLowerCase()}
+                            {t(`analytics.freq.${freq}`)}
                           </span>
                         </div>
                         <Bar value={count} max={stats.recurring} color="#7c3aed" />
                       </div>
                     ))}
                   <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>
-                    {stats.recurring} of {stats.total} orders are recurring
+                    {t('analytics.recurringOfTotal')
+                      .replace('{n}', String(stats.recurring))
+                      .replace('{total}', String(stats.total))}
                   </p>
                 </div>
               </div>
@@ -196,7 +200,7 @@ export default function Analytics() {
           {/* ── Orders per month ── */}
           {stats.sortedMonths.length > 0 && (
             <div className={s.card}>
-              <p className={s.sectionHeading}>Orders per Month</p>
+              <p className={s.sectionHeading}>{t('analytics.ordersPerMonth')}</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {stats.sortedMonths.map(([month, count]) => (
                   <div key={month}>
@@ -212,15 +216,15 @@ export default function Analytics() {
 
           {/* ── Recent orders ── */}
           <div className={s.card}>
-            <p className={s.sectionHeading}>Recent Orders</p>
+            <p className={s.sectionHeading}>{t('analytics.recentOrders')}</p>
             <table className={s.table}>
               <thead>
                 <tr>
-                  <th>Order ID</th>
-                  <th>Date</th>
-                  <th>Currency</th>
-                  <th>Type</th>
-                  <th>Status</th>
+                  <th>{t('dashboard.col.orderId')}</th>
+                  <th>{t('analytics.col.date')}</th>
+                  <th>{t('dashboard.col.currency')}</th>
+                  <th>{t('dashboard.col.type')}</th>
+                  <th>{t('dashboard.col.status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -242,7 +246,7 @@ export default function Analytics() {
                       <td>
                         <span className={`${s.badge} ${order.is_recurring ? s.badgePurple : s.badgeBlue}`}
                           style={{ fontSize: '0.72rem' }}>
-                          {order.is_recurring ? 'Recurring' : 'One-off'}
+                          {order.is_recurring ? t('dashboard.type.recurring') : t('dashboard.type.oneOff')}
                         </span>
                       </td>
                       <td>
@@ -251,7 +255,7 @@ export default function Analytics() {
                           status === 'shipped'   ? s.badgeBlue  :
                           s.badgeYellow
                         }`} style={{ fontSize: '0.72rem' }}>
-                          {STATUS_LABELS[status]}
+                          {t(STATUS_KEYS[status])}
                         </span>
                       </td>
                     </tr>

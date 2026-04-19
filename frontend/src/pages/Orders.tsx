@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { useMyOrders } from '../hooks/useMyOrders';
 import { useOrderStatus, OrderStatus } from '../hooks/useOrderStatus';
 import s from '../styles/shared.module.css';
@@ -17,6 +18,7 @@ export default function Orders() {
   const { orders, loading, error } = useMyOrders();
   const { role, externalId } = useAuth();
   const { getStatus } = useOrderStatus();
+  const { t } = useLanguage();
   const [filter, setFilter] = useState<Filter>('all');
   const navigate = useNavigate();
 
@@ -26,22 +28,29 @@ export default function Orders() {
     return true;
   });
 
+  const roleLabel = role === 'seller' ? t('orders.role.seller') : t('orders.role.buyer');
+  const subtitle = externalId
+    ? t('orders.subtitleFor').replace('{role}', roleLabel).replace('{id}', externalId)
+    : t('orders.setupPrompt');
+
+  const FILTER_KEY: Record<Filter, string> = {
+    'all':       'orders.filter.all',
+    'one-off':   'orders.filter.oneOff',
+    'recurring': 'orders.filter.recurring',
+  };
+
   return (
     <div className={s.page}>
       <div className={s.pageHeader}>
         <div>
           <h1 className={s.pageTitle}>
-            {role === 'seller' ? 'Received Orders' : 'My Orders'}
+            {role === 'seller' ? t('orders.title.seller') : t('orders.title.buyer')}
           </h1>
-          <p className={s.pageSubtitle}>
-            {externalId
-              ? `Showing orders for ${role === 'seller' ? 'seller' : 'buyer'} ID: ${externalId}`
-              : 'Set up your profile in Settings to filter to your own orders'}
-          </p>
+          <p className={s.pageSubtitle}>{subtitle}</p>
         </div>
         {role !== 'seller' && (
           <button className={s.btnPrimary} onClick={() => navigate('/orders/new')}>
-            + New Order
+            {t('orders.newOrder')}
           </button>
         )}
       </div>
@@ -54,29 +63,29 @@ export default function Orders() {
             onClick={() => setFilter(f)}
             className={`${s.tab} ${filter === f ? s.tabActive : ''}`}
           >
-            {f.charAt(0).toUpperCase() + f.slice(1)}
+            {t(FILTER_KEY[f])}
           </button>
         ))}
       </div>
 
-      {error && <p className={s.error}>Could not load orders: {error}</p>}
+      {error && <p className={s.error}>{t('orders.loadError')}: {error}</p>}
 
       <table className={s.table}>
         <thead>
           <tr>
-            <th>Order ID</th>
-            <th>Currency</th>
-            <th>Issue Date</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Note</th>
+            <th>{t('dashboard.col.orderId')}</th>
+            <th>{t('dashboard.col.currency')}</th>
+            <th>{t('dashboard.col.issueDate')}</th>
+            <th>{t('dashboard.col.type')}</th>
+            <th>{t('dashboard.col.status')}</th>
+            <th>{t('orders.col.note')}</th>
           </tr>
         </thead>
         <tbody>
           {loading ? (
-            <tr><td colSpan={6} className={s.loadingCell}>Loading orders…</td></tr>
+            <tr><td colSpan={6} className={s.loadingCell}>{t('dashboard.loadingOrders')}</td></tr>
           ) : filtered.length === 0 ? (
-            <tr><td colSpan={6} className={s.emptyCell}>No orders found.</td></tr>
+            <tr><td colSpan={6} className={s.emptyCell}>{t('dashboard.noOrders')}</td></tr>
           ) : (
             filtered.map((order) => {
               const status = getStatus(order.id);
@@ -93,12 +102,12 @@ export default function Orders() {
                   <td>{order.issue_date}</td>
                   <td>
                     <span className={`${s.badge} ${order.is_recurring ? s.badgePurple : s.badgeBlue}`}>
-                      {order.is_recurring ? 'Recurring' : 'One-off'}
+                      {order.is_recurring ? t('dashboard.type.recurring') : t('dashboard.type.oneOff')}
                     </span>
                   </td>
                   <td>
                     <span className={`${s.badge} ${STATUS_BADGE[status]}`}>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                      {t(`orders.status.${status}`)}
                     </span>
                   </td>
                   <td>{order.order_note ?? '—'}</td>
