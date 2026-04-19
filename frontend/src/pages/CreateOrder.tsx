@@ -227,12 +227,22 @@ export default function CreateOrder() {
         setBuyer((prev) => ({
           ...prev,
           external_id: lockedBuyerId || details.buyerEndpointId || prev.external_id,
-          name: details.buyerName || prev.name,
+          name:        details.buyerName       || prev.name,
+          email:       details.buyerEmail      || prev.email,
+          street:      details.buyerStreet     || prev.street,
+          city:        details.buyerCity       || prev.city,
+          country:     details.buyerCountry    || prev.country,
+          postal_code: details.buyerPostalCode || prev.postal_code,
         }));
         setSeller((prev) => ({
           ...prev,
-          external_id: details.sellerEndpointId || prev.external_id,
-          name: details.sellerName || prev.name,
+          external_id: details.sellerEndpointId  || prev.external_id,
+          name:        details.sellerName        || prev.name,
+          email:       details.sellerEmail       || prev.email,
+          street:      details.sellerStreet      || prev.street,
+          city:        details.sellerCity        || prev.city,
+          country:     details.sellerCountry     || prev.country,
+          postal_code: details.sellerPostalCode  || prev.postal_code,
         }));
         if (details.order_lines.length > 0) {
           setLines(details.order_lines.map((l) => ({
