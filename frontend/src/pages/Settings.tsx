@@ -65,12 +65,6 @@ export default function Settings() {
       {/* Party ID — read-only, derived from email */}
       <div className={s.card}>
         <p className={s.sectionHeading}>{t('settings.partyIdentity')}</p>
-        <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
-          Your party ID is automatically set to your email address and cannot be changed.
-          {role === 'seller' && (
-            <> Share it with buyers so they can reference you when placing orders.</>
-          )}
-        </p>
         <div className={s.detailGrid}>
           <div className={s.detailItem}>
             <span className={s.detailLabel}>Party ID (external_id)</span>
@@ -97,9 +91,6 @@ export default function Settings() {
       {/* Role selector */}
       <div className={s.card}>
         <p className={s.sectionHeading}>{t('settings.role')}</p>
-        <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 18 }}>
-          Your role determines what you can do in Northbound. Buyers create orders; sellers receive and fulfil them.
-        </p>
         <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
           {(['buyer', 'seller'] as const).map((r) => (
             <button
@@ -141,9 +132,6 @@ export default function Settings() {
       {role !== 'seller' && (
         <div className={s.card}>
           <p className={s.sectionHeading}>{t('settings.buyerProfile')}</p>
-          <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
-            Saved locally and used to pre-fill the buyer section when creating an order or template.
-          </p>
           <div className={s.formGrid}>
             <div className={s.formField}>
               <label>Organisation Name</label>
@@ -192,18 +180,12 @@ export default function Settings() {
               />
             </div>
           </div>
-          <p style={{ marginTop: 12, fontSize: '0.78rem', color: '#94a3b8' }}>
-            Saved instantly — no need to click Save.
-          </p>
         </div>
       )}
 
       {/* Preferences section */}
       <div className={s.card}>
         <p className={s.sectionHeading}>{t('settings.preferences')}</p>
-        <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
-          These preferences are saved locally and used to pre-fill forms throughout the app.
-        </p>
         <div className={s.formGrid}>
           <div className={s.formField}>
             <label>Default Currency</label>
@@ -228,34 +210,6 @@ export default function Settings() {
                 </option>
               ))}
             </select>
-          </div>
-        </div>
-        <p style={{ marginTop: 12, fontSize: '0.78rem', color: '#94a3b8' }}>
-          Saved instantly — no need to click Save.
-        </p>
-      </div>
-
-      {/* Platform section */}
-      <div className={s.card}>
-        <p className={s.sectionHeading}>{t('settings.platform')}</p>
-        <div className={s.detailGrid}>
-          <div className={s.detailItem}>
-            <span className={s.detailLabel}>Application</span>
-            <span className={s.detailValue}>Northbound</span>
-          </div>
-          <div className={s.detailItem}>
-            <span className={s.detailLabel}>Purpose</span>
-            <span className={s.detailValue}>Purchase order management for small and medium businesses</span>
-          </div>
-          <div className={s.detailItem}>
-            <span className={s.detailLabel}>Document Standard</span>
-            <span className={s.detailValue}>UBL 2.1</span>
-          </div>
-          <div className={s.detailItem}>
-            <span className={s.detailLabel}>Backend URL</span>
-            <span className={s.mono}>
-              {import.meta.env.VITE_API_URL ?? 'http://localhost:3001'}
-            </span>
           </div>
         </div>
       </div>
