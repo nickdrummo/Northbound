@@ -65,12 +65,6 @@ export default function Settings() {
       {/* Party ID — read-only, derived from email */}
       <div className={s.card}>
         <p className={s.sectionHeading}>{t('settings.partyIdentity')}</p>
-        <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
-          {t('settings.partyIdentityDesc')}
-          {role === 'seller' && (
-            <> {t('settings.partyIdentityDescSellerSuffix')}</>
-          )}
-        </p>
         <div className={s.detailGrid}>
           <div className={s.detailItem}>
             <span className={s.detailLabel}>{t('settings.partyIdLabel')}</span>
@@ -97,9 +91,6 @@ export default function Settings() {
       {/* Role selector */}
       <div className={s.card}>
         <p className={s.sectionHeading}>{t('settings.role')}</p>
-        <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 18 }}>
-          {t('settings.roleDesc')}
-        </p>
         <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
           {(['buyer', 'seller'] as const).map((r) => (
             <button
@@ -140,9 +131,6 @@ export default function Settings() {
       {role !== 'seller' && (
         <div className={s.card}>
           <p className={s.sectionHeading}>{t('settings.buyerProfile')}</p>
-          <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
-            {t('settings.buyerProfileDesc')}
-          </p>
           <div className={s.formGrid}>
             <div className={s.formField}>
               <label>{t('profile.orgName')}</label>
@@ -191,18 +179,12 @@ export default function Settings() {
               />
             </div>
           </div>
-          <p style={{ marginTop: 12, fontSize: '0.78rem', color: '#94a3b8' }}>
-            {t('settings.savedInstantly')}
-          </p>
         </div>
       )}
 
       {/* Preferences section */}
       <div className={s.card}>
         <p className={s.sectionHeading}>{t('settings.preferences')}</p>
-        <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
-          {t('settings.preferencesDesc')}
-        </p>
         <div className={s.formGrid}>
           <div className={s.formField}>
             <label>{t('settings.defaultCurrency')}</label>
@@ -227,34 +209,6 @@ export default function Settings() {
                 </option>
               ))}
             </select>
-          </div>
-        </div>
-        <p style={{ marginTop: 12, fontSize: '0.78rem', color: '#94a3b8' }}>
-          {t('settings.savedInstantly')}
-        </p>
-      </div>
-
-      {/* Platform section */}
-      <div className={s.card}>
-        <p className={s.sectionHeading}>{t('settings.platform')}</p>
-        <div className={s.detailGrid}>
-          <div className={s.detailItem}>
-            <span className={s.detailLabel}>{t('settings.platform.application')}</span>
-            <span className={s.detailValue}>{t('brand.name')}</span>
-          </div>
-          <div className={s.detailItem}>
-            <span className={s.detailLabel}>{t('settings.platform.purpose')}</span>
-            <span className={s.detailValue}>{t('settings.platform.purposeValue')}</span>
-          </div>
-          <div className={s.detailItem}>
-            <span className={s.detailLabel}>{t('settings.platform.docStandard')}</span>
-            <span className={s.detailValue}>UBL 2.1</span>
-          </div>
-          <div className={s.detailItem}>
-            <span className={s.detailLabel}>{t('settings.platform.backendUrl')}</span>
-            <span className={s.mono}>
-              {import.meta.env.VITE_API_URL ?? 'http://localhost:3001'}
-            </span>
           </div>
         </div>
       </div>
