@@ -43,16 +43,16 @@ export default function Settings() {
         <p className={s.sectionHeading}>{t('settings.account')}</p>
         <div className={s.detailGrid}>
           <div className={s.detailItem}>
-            <span className={s.detailLabel}>User ID</span>
+            <span className={s.detailLabel}>{t('settings.userId')}</span>
             <span className={s.mono}>{userID}</span>
           </div>
           <div className={s.detailItem}>
-            <span className={s.detailLabel}>Email</span>
+            <span className={s.detailLabel}>{t('settings.email')}</span>
             <span className={s.detailValue}>{email ?? '—'}</span>
           </div>
           <div className={s.detailItem}>
-            <span className={s.detailLabel}>Session</span>
-            <span style={{ color: '#15803d', fontWeight: 600, fontSize: '0.875rem' }}>Active</span>
+            <span className={s.detailLabel}>{t('settings.session')}</span>
+            <span style={{ color: '#15803d', fontWeight: 600, fontSize: '0.875rem' }}>{t('settings.sessionActive')}</span>
           </div>
         </div>
         <div style={{ marginTop: 20 }}>
@@ -66,14 +66,14 @@ export default function Settings() {
       <div className={s.card}>
         <p className={s.sectionHeading}>{t('settings.partyIdentity')}</p>
         <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
-          Your party ID is automatically set to your email address and cannot be changed.
+          {t('settings.partyIdentityDesc')}
           {role === 'seller' && (
-            <> Share it with buyers so they can reference you when placing orders.</>
+            <> {t('settings.partyIdentityDescSellerSuffix')}</>
           )}
         </p>
         <div className={s.detailGrid}>
           <div className={s.detailItem}>
-            <span className={s.detailLabel}>Party ID (external_id)</span>
+            <span className={s.detailLabel}>{t('settings.partyIdLabel')}</span>
             <span
               className={s.mono}
               style={{ color: '#4361ee', fontWeight: 600, fontSize: '0.875rem' }}
@@ -82,11 +82,11 @@ export default function Settings() {
             </span>
           </div>
           <div className={s.detailItem}>
-            <span className={s.detailLabel}>Role</span>
+            <span className={s.detailLabel}>{t('settings.roleLabel')}</span>
             <span className={s.detailValue}>
               {role ? (
                 <span className={`${s.badge} ${role === 'seller' ? s.badgePurple : s.badgeBlue}`}>
-                  {role.charAt(0).toUpperCase() + role.slice(1)}
+                  {t(`settings.role.${role}`)}
                 </span>
               ) : '—'}
             </span>
@@ -98,7 +98,7 @@ export default function Settings() {
       <div className={s.card}>
         <p className={s.sectionHeading}>{t('settings.role')}</p>
         <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 18 }}>
-          Your role determines what you can do in Northbound. Buyers create orders; sellers receive and fulfil them.
+          {t('settings.roleDesc')}
         </p>
         <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
           {(['buyer', 'seller'] as const).map((r) => (
@@ -116,10 +116,9 @@ export default function Settings() {
                 fontSize: '0.875rem',
                 cursor: 'pointer',
                 transition: 'all 0.15s',
-                textTransform: 'capitalize',
               }}
             >
-              {r}
+              {t(`settings.role.${r}`)}
             </button>
           ))}
         </div>
@@ -128,11 +127,11 @@ export default function Settings() {
           onClick={handleSaveRole}
           disabled={pendingRole === role}
         >
-          Save Role
+          {t('settings.saveRole')}
         </button>
         {roleSaved && (
           <span className={s.success} style={{ display: 'inline-block', marginLeft: 12, padding: '5px 12px' }}>
-            Saved!
+            {t('settings.saved')}
           </span>
         )}
       </div>
@@ -142,50 +141,50 @@ export default function Settings() {
         <div className={s.card}>
           <p className={s.sectionHeading}>{t('settings.buyerProfile')}</p>
           <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
-            Saved locally and used to pre-fill the buyer section when creating an order or template.
+            {t('settings.buyerProfileDesc')}
           </p>
           <div className={s.formGrid}>
             <div className={s.formField}>
-              <label>Organisation Name</label>
+              <label>{t('profile.orgName')}</label>
               <input
                 value={profile.name}
                 onChange={(e) => updateProfile({ name: e.target.value })}
-                placeholder="e.g. Acme Pty Ltd"
+                placeholder={t('profile.orgNamePlaceholder')}
               />
             </div>
             <div className={s.formField}>
-              <label>Contact Email</label>
+              <label>{t('profile.contactEmail')}</label>
               <input
                 type="email"
                 value={profile.email}
                 onChange={(e) => updateProfile({ email: e.target.value })}
-                placeholder="contact@example.com"
+                placeholder={t('profile.contactEmailPlaceholder')}
               />
             </div>
             <div className={s.formField}>
-              <label>Street</label>
+              <label>{t('profile.street')}</label>
               <input
                 value={profile.street}
                 onChange={(e) => updateProfile({ street: e.target.value })}
               />
             </div>
             <div className={s.formField}>
-              <label>City</label>
+              <label>{t('profile.city')}</label>
               <input
                 value={profile.city}
                 onChange={(e) => updateProfile({ city: e.target.value })}
               />
             </div>
             <div className={s.formField}>
-              <label>Country</label>
+              <label>{t('profile.country')}</label>
               <input
                 value={profile.country}
                 onChange={(e) => updateProfile({ country: e.target.value })}
-                placeholder="e.g. AU"
+                placeholder={t('profile.countryPlaceholder')}
               />
             </div>
             <div className={s.formField}>
-              <label>Postal Code</label>
+              <label>{t('profile.postalCode')}</label>
               <input
                 value={profile.postal_code}
                 onChange={(e) => updateProfile({ postal_code: e.target.value })}
@@ -193,7 +192,7 @@ export default function Settings() {
             </div>
           </div>
           <p style={{ marginTop: 12, fontSize: '0.78rem', color: '#94a3b8' }}>
-            Saved instantly — no need to click Save.
+            {t('settings.savedInstantly')}
           </p>
         </div>
       )}
@@ -202,11 +201,11 @@ export default function Settings() {
       <div className={s.card}>
         <p className={s.sectionHeading}>{t('settings.preferences')}</p>
         <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: 16 }}>
-          These preferences are saved locally and used to pre-fill forms throughout the app.
+          {t('settings.preferencesDesc')}
         </p>
         <div className={s.formGrid}>
           <div className={s.formField}>
-            <label>Default Currency</label>
+            <label>{t('settings.defaultCurrency')}</label>
             <select
               value={prefs.defaultCurrency}
               onChange={(e) => updatePreferences({ defaultCurrency: e.target.value })}
@@ -231,7 +230,7 @@ export default function Settings() {
           </div>
         </div>
         <p style={{ marginTop: 12, fontSize: '0.78rem', color: '#94a3b8' }}>
-          Saved instantly — no need to click Save.
+          {t('settings.savedInstantly')}
         </p>
       </div>
 
@@ -240,19 +239,19 @@ export default function Settings() {
         <p className={s.sectionHeading}>{t('settings.platform')}</p>
         <div className={s.detailGrid}>
           <div className={s.detailItem}>
-            <span className={s.detailLabel}>Application</span>
-            <span className={s.detailValue}>Northbound</span>
+            <span className={s.detailLabel}>{t('settings.platform.application')}</span>
+            <span className={s.detailValue}>{t('brand.name')}</span>
           </div>
           <div className={s.detailItem}>
-            <span className={s.detailLabel}>Purpose</span>
-            <span className={s.detailValue}>Purchase order management for small and medium businesses</span>
+            <span className={s.detailLabel}>{t('settings.platform.purpose')}</span>
+            <span className={s.detailValue}>{t('settings.platform.purposeValue')}</span>
           </div>
           <div className={s.detailItem}>
-            <span className={s.detailLabel}>Document Standard</span>
+            <span className={s.detailLabel}>{t('settings.platform.docStandard')}</span>
             <span className={s.detailValue}>UBL 2.1</span>
           </div>
           <div className={s.detailItem}>
-            <span className={s.detailLabel}>Backend URL</span>
+            <span className={s.detailLabel}>{t('settings.platform.backendUrl')}</span>
             <span className={s.mono}>
               {import.meta.env.VITE_API_URL ?? 'http://localhost:3001'}
             </span>

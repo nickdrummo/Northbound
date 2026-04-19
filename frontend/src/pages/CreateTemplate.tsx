@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { createRecurringOrder, RecurringFrequency, RecurringOrderInput } from '../api/recurring';
 import { Party, OrderLine } from '../api/orders';
 import { getDefaultCurrency } from '../hooks/usePreferences';
@@ -24,9 +25,10 @@ interface PartySectionProps {
 }
 
 function PartySection({ which, data, onChange }: PartySectionProps) {
+  const { t } = useLanguage();
   return (
     <div className={s.card}>
-      <p className={s.sectionHeading}>{which === 'buyer' ? 'Buyer (Your Organisation)' : 'Seller (Supplier)'}</p>
+      <p className={s.sectionHeading}>{which === 'buyer' ? t('createTemplate.buyerSection') : t('createTemplate.sellerSection')}</p>
       <div className={s.formGrid}>
         {(['external_id', 'name', 'email', 'street', 'city', 'country', 'postal_code'] as (keyof Party)[]).map((field) => (
           <div className={s.formField} key={field}>
@@ -48,6 +50,7 @@ function PartySection({ which, data, onChange }: PartySectionProps) {
 export default function CreateTemplate() {
   const navigate = useNavigate();
   const { externalId, role } = useAuth();
+  const { t } = useLanguage();
   const { sellers: savedSellers, saveSeller, removeSeller } = useSavedSellers();
   const { setTemplateName } = useTemplateNames();
   const [selectedSavedSellerId, setSelectedSavedSellerId] = useState('');
@@ -143,24 +146,24 @@ export default function CreateTemplate() {
       <div className={s.pageHeader}>
         <div>
           <button type="button" className={s.backLink} onClick={() => navigate('/templates')}>
-            ← Back to Templates
+            {t('createTemplate.backToTemplates')}
           </button>
-          <h1 className={s.pageTitle} style={{ marginTop: 6 }}>New Recurring Template</h1>
+          <h1 className={s.pageTitle} style={{ marginTop: 6 }}>{t('createTemplate.title')}</h1>
         </div>
       </div>
 
       <div className={s.card}>
-        <p className={s.sectionHeading}>Template Name</p>
+        <p className={s.sectionHeading}>{t('createTemplate.templateName')}</p>
         <div className={s.formField} style={{ marginBottom: 0 }}>
-          <label className={s.required}>Name</label>
+          <label className={s.required}>{t('createTemplate.nameLabel')}</label>
           <input
             value={templateName}
             required
             onChange={(e) => setTemplateNameInput(e.target.value)}
-            placeholder="e.g. Monthly office supplies"
+            placeholder={t('createTemplate.namePlaceholder')}
           />
           <p style={{ marginTop: 6, fontSize: '0.78rem', color: '#94a3b8' }}>
-            Used to identify this template in lists and dropdowns.
+            {t('createTemplate.nameHelp')}
           </p>
         </div>
       </div>
@@ -174,15 +177,15 @@ export default function CreateTemplate() {
       {/* Saved seller picker — lets users re-use suppliers from previous orders */}
       {savedSellers.length > 0 && (
         <div className={s.card}>
-          <p className={s.sectionHeading}>Load a Saved Supplier</p>
+          <p className={s.sectionHeading}>{t('savedSeller.heading')}</p>
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div className={s.formField} style={{ flex: '1 1 280px', minWidth: 200, marginBottom: 0 }}>
-              <label>Saved Suppliers</label>
+              <label>{t('savedSeller.label')}</label>
               <select
                 value={selectedSavedSellerId}
                 onChange={(e) => applySavedSeller(e.target.value)}
               >
-                <option value="">— Select a saved supplier —</option>
+                <option value="">{t('savedSeller.selectPlaceholder')}</option>
                 {savedSellers.map((sv) => (
                   <option key={sv.external_id} value={sv.external_id}>
                     {sv.name} · {sv.external_id}
@@ -199,14 +202,14 @@ export default function CreateTemplate() {
                   setSelectedSavedSellerId('');
                 }}
                 style={{ marginBottom: 1 }}
-                title="Forget this supplier"
+                title={t('savedSeller.forgetTitle')}
               >
-                Forget
+                {t('savedSeller.forget')}
               </button>
             )}
           </div>
           <p style={{ marginTop: 10, fontSize: '0.78rem', color: '#94a3b8' }}>
-            Selecting a supplier pre-fills the seller fields below. You can still edit them.
+            {t('savedSeller.help')}
           </p>
         </div>
       )}
@@ -218,46 +221,46 @@ export default function CreateTemplate() {
       />
 
       <div className={s.card}>
-        <p className={s.sectionHeading}>Recurrence Settings</p>
+        <p className={s.sectionHeading}>{t('createTemplate.recurrenceSettings')}</p>
         <div className={s.formGrid}>
           <div className={s.formField}>
-            <label className={s.required}>Frequency</label>
+            <label className={s.required}>{t('createTemplate.frequency')}</label>
             <select value={frequency} onChange={(e) => setFrequency(e.target.value as RecurringFrequency)}>
               {FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
           <div className={s.formField}>
-            <label className={s.required}>Interval</label>
+            <label className={s.required}>{t('createTemplate.interval')}</label>
             <input type="number" min={1} value={interval} required
               onChange={(e) => setInterval(Number(e.target.value))} />
           </div>
           <div className={s.formField}>
-            <label className={s.required}>Start Date</label>
+            <label className={s.required}>{t('createTemplate.startDate')}</label>
             <input type="date" value={startDate} required onChange={(e) => setStartDate(e.target.value)} />
           </div>
           <div className={s.formField}>
-            <label>End Date <span style={{ color: '#a0aec0', fontWeight: 400 }}>(optional)</span></label>
+            <label>{t('createTemplate.endDate')} <span style={{ color: '#a0aec0', fontWeight: 400 }}>{t('createTemplate.endDateOptional')}</span></label>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
           <div className={s.formField}>
-            <label className={s.required}>Currency</label>
+            <label className={s.required}>{t('createTemplate.currency')}</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {['AUD', 'USD', 'GBP', 'EUR', 'NZD'].map((c) => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div className={s.formField} style={{ gridColumn: '1 / -1' }}>
-            <label>Note</label>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note" />
+            <label>{t('createTemplate.note')}</label>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('createTemplate.notePlaceholder')} />
           </div>
         </div>
       </div>
 
       <div className={s.card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <p className={s.sectionHeading} style={{ margin: 0, borderBottom: 'none', padding: 0 }}>Order Lines</p>
+          <p className={s.sectionHeading} style={{ margin: 0, borderBottom: 'none', padding: 0 }}>{t('createTemplate.orderLines')}</p>
           <button type="button" className={s.btnSecondary} style={{ padding: '5px 14px', fontSize: '0.8rem' }}
             onClick={() => setLines((p) => [...p, { description: '', quantity: 1, unit_price: 0, unit_code: 'EA' }])}>
-            + Add Line
+            {t('createTemplate.addLine')}
           </button>
         </div>
         <table className={s.table}>
@@ -286,9 +289,9 @@ export default function CreateTemplate() {
 
       {error && <p className={s.error}>{error}</p>}
       <div className={s.formActions}>
-        <button type="button" className={s.btnSecondary} onClick={() => navigate('/templates')}>Cancel</button>
+        <button type="button" className={s.btnSecondary} onClick={() => navigate('/templates')}>{t('common.cancel')}</button>
         <button type="submit" className={s.btnPrimary} disabled={submitting}>
-          {submitting ? 'Creating…' : 'Create Template'}
+          {submitting ? t('createTemplate.submitting') : t('createTemplate.submit')}
         </button>
       </div>
     </form>
