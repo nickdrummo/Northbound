@@ -1,8 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { createRecurringOrder, RecurringFrequency, RecurringOrderInput } from '../api/recurring';
 import { Party, OrderLine } from '../api/orders';
 import { getDefaultCurrency } from '../hooks/usePreferences';
+import { useSavedSellers } from '../hooks/useSavedSellers';
+import { loadBuyerProfile } from '../hooks/useBuyerProfile';
+import { useTemplateNames } from '../hooks/useTemplateNames';
 import s from '../styles/shared.module.css';
 
 const EMPTY_PARTY: Party = {
@@ -11,10 +16,60 @@ const EMPTY_PARTY: Party = {
 
 const FREQUENCIES: RecurringFrequency[] = ['DAILY', 'WEEKLY', 'MONTHLY'];
 
+// Defined OUTSIDE CreateTemplate so each render references the same component
+// type — otherwise React remounts the inputs on every keystroke and steals focus.
+interface PartySectionProps {
+  which: 'buyer' | 'seller';
+  data: Party;
+  onChange: (field: keyof Party, value: string) => void;
+}
+
+function PartySection({ which, data, onChange }: PartySectionProps) {
+  const { t } = useLanguage();
+  return (
+    <div className={s.card}>
+      <p className={s.sectionHeading}>{which === 'buyer' ? t('createTemplate.buyerSection') : t('createTemplate.sellerSection')}</p>
+      <div className={s.formGrid}>
+        {(['external_id', 'name', 'email', 'street', 'city', 'country', 'postal_code'] as (keyof Party)[]).map((field) => (
+          <div className={s.formField} key={field}>
+            <label className={field === 'external_id' || field === 'name' ? s.required : ''}>
+              {field.replace('_', ' ')}
+            </label>
+            <input
+              value={data[field] ?? ''}
+              required={field === 'external_id' || field === 'name'}
+              onChange={(e) => onChange(field, e.target.value)}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function CreateTemplate() {
   const navigate = useNavigate();
+  const { externalId, role } = useAuth();
+  const { t } = useLanguage();
+  const { sellers: savedSellers, saveSeller, removeSeller } = useSavedSellers();
+  const { setTemplateName } = useTemplateNames();
+  const [selectedSavedSellerId, setSelectedSavedSellerId] = useState('');
+  const [templateName, setTemplateNameInput] = useState('');
 
-  const [buyer, setBuyer] = useState<Party>({ ...EMPTY_PARTY });
+  // Pre-fill the buyer section from the saved buyer profile (if any).
+  const [buyer, setBuyer] = useState<Party>(() => {
+    const saved = loadBuyerProfile();
+    const lockedBuyerId = (role === 'buyer' && externalId) ? externalId : '';
+    return {
+      external_id: lockedBuyerId,
+      name:        saved.name,
+      email:       saved.email,
+      street:      saved.street,
+      city:        saved.city,
+      country:     saved.country,
+      postal_code: saved.postal_code,
+    };
+  });
   const [seller, setSeller] = useState<Party>({ ...EMPTY_PARTY });
   const [currency, setCurrency] = useState(getDefaultCurrency);
   const [note, setNote] = useState('');
@@ -30,6 +85,22 @@ export default function CreateTemplate() {
 
   function updateParty(which: 'buyer' | 'seller', field: keyof Party, value: string) {
     (which === 'buyer' ? setBuyer : setSeller)((p) => ({ ...p, [field]: value }));
+  }
+
+  function applySavedSeller(externalIdValue: string) {
+    setSelectedSavedSellerId(externalIdValue);
+    if (!externalIdValue) return;
+    const found = savedSellers.find((sv) => sv.external_id === externalIdValue);
+    if (!found) return;
+    setSeller({
+      external_id: found.external_id,
+      name:        found.name,
+      email:       found.email ?? '',
+      street:      found.street ?? '',
+      city:        found.city ?? '',
+      country:     found.country ?? '',
+      postal_code: found.postal_code ?? '',
+    });
   }
 
   function updateLine(i: number, field: string, value: string | number) {
@@ -58,7 +129,11 @@ export default function CreateTemplate() {
     setSubmitting(true);
     setError(null);
     try {
-      await createRecurringOrder(input);
+      const created = await createRecurringOrder(input);
+      saveSeller(seller);
+      if (templateName.trim()) {
+        setTemplateName(created.id, templateName);
+      }
       navigate('/templates');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create template.');
@@ -66,84 +141,126 @@ export default function CreateTemplate() {
     }
   }
 
-  function PartySection({ which }: { which: 'buyer' | 'seller' }) {
-    const data = which === 'buyer' ? buyer : seller;
-    return (
-      <div className={s.card}>
-        <p className={s.sectionHeading}>{which === 'buyer' ? 'Buyer (Your Organisation)' : 'Seller (Supplier)'}</p>
-        <div className={s.formGrid}>
-          {(['external_id', 'name', 'email', 'street', 'city', 'country', 'postal_code'] as (keyof Party)[]).map((field) => (
-            <div className={s.formField} key={field}>
-              <label className={field === 'external_id' || field === 'name' ? s.required : ''}>
-                {field.replace('_', ' ')}
-              </label>
-              <input
-                value={data[field] ?? ''}
-                required={field === 'external_id' || field === 'name'}
-                onChange={(e) => updateParty(which, field, e.target.value)}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <form className={s.page} onSubmit={handleSubmit}>
       <div className={s.pageHeader}>
         <div>
           <button type="button" className={s.backLink} onClick={() => navigate('/templates')}>
-            ← Back to Templates
+            {t('createTemplate.backToTemplates')}
           </button>
-          <h1 className={s.pageTitle} style={{ marginTop: 6 }}>New Recurring Template</h1>
+          <h1 className={s.pageTitle} style={{ marginTop: 6 }}>{t('createTemplate.title')}</h1>
         </div>
       </div>
 
-      <PartySection which="buyer" />
-      <PartySection which="seller" />
+      <div className={s.card}>
+        <p className={s.sectionHeading}>{t('createTemplate.templateName')}</p>
+        <div className={s.formField} style={{ marginBottom: 0 }}>
+          <label className={s.required}>{t('createTemplate.nameLabel')}</label>
+          <input
+            value={templateName}
+            required
+            onChange={(e) => setTemplateNameInput(e.target.value)}
+            placeholder={t('createTemplate.namePlaceholder')}
+          />
+          <p style={{ marginTop: 6, fontSize: '0.78rem', color: '#94a3b8' }}>
+            {t('createTemplate.nameHelp')}
+          </p>
+        </div>
+      </div>
+
+      <PartySection
+        which="buyer"
+        data={buyer}
+        onChange={(field, value) => updateParty('buyer', field, value)}
+      />
+
+      {/* Saved seller picker — lets users re-use suppliers from previous orders */}
+      {savedSellers.length > 0 && (
+        <div className={s.card}>
+          <p className={s.sectionHeading}>{t('savedSeller.heading')}</p>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className={s.formField} style={{ flex: '1 1 280px', minWidth: 200, marginBottom: 0 }}>
+              <label>{t('savedSeller.label')}</label>
+              <select
+                value={selectedSavedSellerId}
+                onChange={(e) => applySavedSeller(e.target.value)}
+              >
+                <option value="">{t('savedSeller.selectPlaceholder')}</option>
+                {savedSellers.map((sv) => (
+                  <option key={sv.external_id} value={sv.external_id}>
+                    {sv.name} · {sv.external_id}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedSavedSellerId && (
+              <button
+                type="button"
+                className={s.btnSecondary}
+                onClick={() => {
+                  removeSeller(selectedSavedSellerId);
+                  setSelectedSavedSellerId('');
+                }}
+                style={{ marginBottom: 1 }}
+                title={t('savedSeller.forgetTitle')}
+              >
+                {t('savedSeller.forget')}
+              </button>
+            )}
+          </div>
+          <p style={{ marginTop: 10, fontSize: '0.78rem', color: '#94a3b8' }}>
+            {t('savedSeller.help')}
+          </p>
+        </div>
+      )}
+
+      <PartySection
+        which="seller"
+        data={seller}
+        onChange={(field, value) => updateParty('seller', field, value)}
+      />
 
       <div className={s.card}>
-        <p className={s.sectionHeading}>Recurrence Settings</p>
+        <p className={s.sectionHeading}>{t('createTemplate.recurrenceSettings')}</p>
         <div className={s.formGrid}>
           <div className={s.formField}>
-            <label className={s.required}>Frequency</label>
+            <label className={s.required}>{t('createTemplate.frequency')}</label>
             <select value={frequency} onChange={(e) => setFrequency(e.target.value as RecurringFrequency)}>
               {FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
           <div className={s.formField}>
-            <label className={s.required}>Interval</label>
+            <label className={s.required}>{t('createTemplate.interval')}</label>
             <input type="number" min={1} value={interval} required
               onChange={(e) => setInterval(Number(e.target.value))} />
           </div>
           <div className={s.formField}>
-            <label className={s.required}>Start Date</label>
+            <label className={s.required}>{t('createTemplate.startDate')}</label>
             <input type="date" value={startDate} required onChange={(e) => setStartDate(e.target.value)} />
           </div>
           <div className={s.formField}>
-            <label>End Date <span style={{ color: '#a0aec0', fontWeight: 400 }}>(optional)</span></label>
+            <label>{t('createTemplate.endDate')} <span style={{ color: '#a0aec0', fontWeight: 400 }}>{t('createTemplate.endDateOptional')}</span></label>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
           <div className={s.formField}>
-            <label className={s.required}>Currency</label>
+            <label className={s.required}>{t('createTemplate.currency')}</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {['AUD', 'USD', 'GBP', 'EUR', 'NZD'].map((c) => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div className={s.formField} style={{ gridColumn: '1 / -1' }}>
-            <label>Note</label>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note" />
+            <label>{t('createTemplate.note')}</label>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('createTemplate.notePlaceholder')} />
           </div>
         </div>
       </div>
 
       <div className={s.card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <p className={s.sectionHeading} style={{ margin: 0, borderBottom: 'none', padding: 0 }}>Order Lines</p>
+          <p className={s.sectionHeading} style={{ margin: 0, borderBottom: 'none', padding: 0 }}>{t('createTemplate.orderLines')}</p>
           <button type="button" className={s.btnSecondary} style={{ padding: '5px 14px', fontSize: '0.8rem' }}
             onClick={() => setLines((p) => [...p, { description: '', quantity: 1, unit_price: 0, unit_code: 'EA' }])}>
-            + Add Line
+            {t('createTemplate.addLine')}
           </button>
         </div>
         <table className={s.table}>
@@ -172,9 +289,9 @@ export default function CreateTemplate() {
 
       {error && <p className={s.error}>{error}</p>}
       <div className={s.formActions}>
-        <button type="button" className={s.btnSecondary} onClick={() => navigate('/templates')}>Cancel</button>
+        <button type="button" className={s.btnSecondary} onClick={() => navigate('/templates')}>{t('common.cancel')}</button>
         <button type="submit" className={s.btnPrimary} disabled={submitting}>
-          {submitting ? 'Creating…' : 'Create Template'}
+          {submitting ? t('createTemplate.submitting') : t('createTemplate.submit')}
         </button>
       </div>
     </form>

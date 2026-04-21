@@ -1,32 +1,39 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import styles from './Sidebar.module.css';
 
-const BUYER_ITEMS = [
-  { label: 'Dashboard',  path: '/' },
-  { label: 'My Orders',  path: '/orders' },
-  { label: 'Templates',  path: '/templates' },
-  { label: 'Analytics',  path: '/analytics' },
-  { label: 'Settings',   path: '/settings' },
+interface NavItem {
+  labelKey: string;
+  path: string;
+}
+
+const BUYER_ITEMS: NavItem[] = [
+  { labelKey: 'nav.dashboard', path: '/' },
+  { labelKey: 'nav.myOrders',  path: '/orders' },
+  { labelKey: 'nav.templates', path: '/templates' },
+  { labelKey: 'nav.analytics', path: '/analytics' },
+  { labelKey: 'nav.settings',  path: '/settings' },
 ];
 
-const SELLER_ITEMS = [
-  { label: 'Dashboard',        path: '/' },
-  { label: 'Received Orders',  path: '/received-orders' },
-  { label: 'Analytics',        path: '/analytics' },
-  { label: 'Settings',         path: '/settings' },
+const SELLER_ITEMS: NavItem[] = [
+  { labelKey: 'nav.dashboard',       path: '/' },
+  { labelKey: 'nav.receivedOrders',  path: '/received-orders' },
+  { labelKey: 'nav.analytics',       path: '/analytics' },
+  { labelKey: 'nav.settings',        path: '/settings' },
 ];
 
-const DEFAULT_ITEMS = [
-  { label: 'Dashboard',  path: '/' },
-  { label: 'Orders',     path: '/orders' },
-  { label: 'Templates',  path: '/templates' },
-  { label: 'Analytics',  path: '/analytics' },
-  { label: 'Settings',   path: '/settings' },
+const DEFAULT_ITEMS: NavItem[] = [
+  { labelKey: 'nav.dashboard', path: '/' },
+  { labelKey: 'nav.orders',    path: '/orders' },
+  { labelKey: 'nav.templates', path: '/templates' },
+  { labelKey: 'nav.analytics', path: '/analytics' },
+  { labelKey: 'nav.settings',  path: '/settings' },
 ];
 
 function Sidebar() {
   const { role } = useAuth();
+  const { t } = useLanguage();
 
   const navItems =
     role === 'buyer'  ? BUYER_ITEMS  :
@@ -46,7 +53,7 @@ function Sidebar() {
                   isActive ? `${styles.navLink} ${styles.active}` : styles.navLink
                 }
               >
-                {item.label}
+                {t(item.labelKey)}
               </NavLink>
             </li>
           ))}
@@ -56,7 +63,7 @@ function Sidebar() {
       {role && (
         <div className={styles.roleBadge}>
           <span className={styles.roleDot} />
-          {role === 'buyer' ? 'Buyer account' : 'Seller account'}
+          {role === 'buyer' ? t('nav.buyerAccount') : t('nav.sellerAccount')}
         </div>
       )}
     </aside>
