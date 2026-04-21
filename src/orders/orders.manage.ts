@@ -1172,7 +1172,7 @@ export async function generateInvoiceForOrder(
     };
 
     // Generate UBL XML
-    const { ubl_xml } = generateInvoiceUBL({
+    const ublParams: Parameters<typeof generateInvoiceUBL>[0] = {
         invoiceID,
         orderID,
         issueDate,
@@ -1181,9 +1181,13 @@ export async function generateInvoiceForOrder(
         seller: sellerParty,
         invoiceLines,
         totals,
-        invoiceNote: input.invoice_note,
         taxRate,
-    });
+    };
+    if (input.invoice_note !== undefined) {
+        ublParams.invoiceNote = input.invoice_note;
+    }
+
+    const { ubl_xml } = generateInvoiceUBL(ublParams);
 
     return {
         invoice_id: invoiceID,
@@ -1194,7 +1198,7 @@ export async function generateInvoiceForOrder(
         seller: sellerParty,
         invoice_lines: invoiceLines,
         totals,
-        invoice_note: input.invoice_note,
         ubl_xml,
+        ...(input.invoice_note !== undefined && { invoice_note: input.invoice_note }),
     };
 }
