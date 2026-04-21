@@ -13,6 +13,11 @@ export interface OrderResponseUBLResult {
   ubl_xml: string;
 }
 
+export interface InvoiceUBLResult {
+  invoiceID: string;
+  ubl_xml: string;
+}
+
 const builder = new XMLBuilder({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
@@ -132,4 +137,134 @@ export function generateOrderResponseUBL(params: {
     '<?xml version="1.0" encoding="UTF-8"?>\n' + builder.build(ublObject);
 
   return { responseID, ubl_xml };
+}
+
+/** UBL 2.1 Invoice generated from a stored order. */
+export function generateInvoiceUBL(params: {
+  invoiceID: string;
+  orderID: string;
+  issueDate: string;
+  currency: string;
+  buyer: Party;
+  seller: Party;
+  invoiceLines: InvoiceLine[];
+  totals: InvoiceTotals;
+  invoiceNote?: string;
+  taxRate: number;
+}): InvoiceUBLResult {
+  const {
+    invoiceID, orderID, issueDate, currency,
+    buyer, seller, invoiceLines, totals, invoiceNote, taxRate,
+  } = params;
+
+  const ublObject = {
+    Invoice: {
+      '@_xmlns': 'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2',
+      '@_xmlns:cbc': 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2',
+      '@_xmlns:cac': 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2',
+      'cbc:UBLVersionID': '2.1',
+      'cbc:ID': invoiceID,
+      'cbc:IssueDate': issueDate,
+      'cbc:InvoiceTypeCode': '380',
+      'cbc:Note': invoiceNote ?? '',
+      'cbc:DocumentCurrencyCode': currency,
+      'cac:OrderReference': {
+        'cbc:ID': orderID,
+      },
+      'cac:AccountingSupplierParty': buildInvoiceParty(seller),
+      'cac:AccountingCustomerParty': buildInvoiceParty(buyer),
+      'cac:TaxTotal': {
+        'cbc:TaxAmount': {
+          '@_currencyID': currency,
+          '#text': totals.tax_amount.toFixed(2),
+        },
+        'cac:TaxSubtotal': {
+          'cbc:TaxableAmount': {
+            '@_currencyID': currency,
+            '#text': totals.line_extension_amount.toFixed(2),
+          },
+          'cbc:TaxAmount': {
+            '@_currencyID': currency,
+            '#text': totals.tax_amount.toFixed(2),
+          },
+          'cac:TaxCategory': {
+            'cbc:Percent': (taxRate * 100).toFixed(2),
+            'cac:TaxScheme': {
+              'cbc:ID': 'GST',
+            },
+          },
+        },
+      },
+      'cac:LegalMonetaryTotal': {
+        'cbc:LineExtensionAmount': {
+          '@_currencyID': currency,
+          '#text': totals.line_extension_amount.toFixed(2),
+        },
+        'cbc:TaxExclusiveAmount': {
+          '@_currencyID': currency,
+          '#text': totals.line_extension_amount.toFixed(2),
+        },
+        'cbc:TaxInclusiveAmount': {
+          '@_currencyID': currency,
+          '#text': totals.tax_inclusive_amount.toFixed(2),
+        },
+        'cbc:PayableAmount': {
+          '@_currencyID': currency,
+          '#text': totals.payable_amount.toFixed(2),
+        },
+      },
+      'cac:InvoiceLine': invoiceLines.map((line) => buildInvoiceLine(line, currency)),
+    },
+  };
+
+  const ubl_xml =
+    '<?xml version="1.0" encoding="UTF-8"?>\n' + builder.build(ublObject);
+
+  return { invoiceID, ubl_xml };
+}
+
+// Separate from buildParty because invoice uses AccountingSupplierParty/AccountingCustomerParty
+function buildInvoiceParty(party: Party) {
+  return {
+    'cac:Party': {
+      'cbc:EndpointID': party.external_id,
+      'cac:PartyName': {
+        'cbc:Name': party.name,
+      },
+      'cac:PostalAddress': {
+        'cbc:StreetName': party.street ?? '',
+        'cbc:CityName': party.city ?? '',
+        'cbc:PostalZone': party.postal_code ?? '',
+        'cac:Country': {
+          'cbc:IdentificationCode': party.country ?? '',
+        },
+      },
+      'cac:Contact': {
+        'cbc:ElectronicMail': party.email ?? '',
+      },
+    },
+  };
+}
+
+function buildInvoiceLine(line: InvoiceLine, currency: string) {
+  return {
+    'cbc:ID': line.line_id,
+    'cbc:InvoicedQuantity': {
+      '@_unitCode': line.unit_code,
+      '#text': line.quantity,
+    },
+    'cbc:LineExtensionAmount': {
+      '@_currencyID': currency,
+      '#text': line.line_total.toFixed(2),
+    },
+    'cac:Item': {
+      'cbc:Description': line.description,
+    },
+    'cac:Price': {
+      'cbc:PriceAmount': {
+        '@_currencyID': currency,
+        '#text': line.unit_price.toFixed(2),
+      },
+    },
+  };
 }
