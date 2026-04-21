@@ -6,6 +6,10 @@ import {
   OrderInput, RecurringOrderInput, RecurringFrequency, OrderLine, Party, Order,
 } from '../api/orders';
 import { getDefaultCurrency } from '../hooks/usePreferences';
+import { useSavedSellers } from '../hooks/useSavedSellers';
+import { loadBuyerProfile } from '../hooks/useBuyerProfile';
+import { useTemplateNames } from '../hooks/useTemplateNames';
+import { useOrderNames } from '../hooks/useOrderNames';
 import s from '../styles/shared.module.css';
 
 const EMPTY_PARTY: Party = {
@@ -92,13 +96,30 @@ function PartySection({ label, data, onChange, lockExternalId }: PartySectionPro
 export default function CreateOrder() {
   const navigate = useNavigate();
   const { role, externalId } = useAuth();
+  const { sellers: savedSellers, saveSeller, removeSeller } = useSavedSellers();
+  const { getName: getTemplateName } = useTemplateNames();
+  const { setOrderName } = useOrderNames();
+  const [selectedSavedSellerId, setSelectedSavedSellerId] = useState('');
+
+  // Optional user-chosen name for this order (persisted locally after creation)
+  const [orderName, setOrderNameInput] = useState('');
 
   // Buyer external_id is always locked to the user's profile ID so orders stay discoverable
   const lockedBuyerId = (role === 'buyer' && externalId) ? externalId : '';
 
-  const [buyer, setBuyer] = useState<Party>({
-    ...EMPTY_PARTY,
-    external_id: lockedBuyerId,
+  // Pre-fill the buyer section from the saved buyer profile (if any).
+  // external_id is still locked to the authenticated user's email when present.
+  const [buyer, setBuyer] = useState<Party>(() => {
+    const saved = loadBuyerProfile();
+    return {
+      external_id: lockedBuyerId,
+      name:        saved.name,
+      email:       saved.email,
+      street:      saved.street,
+      city:        saved.city,
+      country:     saved.country,
+      postal_code: saved.postal_code,
+    };
   });
   const [seller, setSeller]   = useState<Party>({ ...EMPTY_PARTY });
   const [currency, setCurrency] = useState(getDefaultCurrency);
@@ -156,6 +177,23 @@ export default function CreateOrder() {
     setSeller((prev) => ({ ...prev, [field]: value }));
   }
 
+  function applySavedSeller(externalIdValue: string) {
+    setSelectedSavedSellerId(externalIdValue);
+    if (!externalIdValue) return;
+    const found = savedSellers.find((s) => s.external_id === externalIdValue);
+    if (!found) return;
+    // Copy only the Party fields — `savedAt` is bookkeeping, not part of the payload
+    setSeller({
+      external_id: found.external_id,
+      name:        found.name,
+      email:       found.email ?? '',
+      street:      found.street ?? '',
+      city:        found.city ?? '',
+      country:     found.country ?? '',
+      postal_code: found.postal_code ?? '',
+    });
+  }
+
   function updateLine(index: number, field: keyof typeof EMPTY_LINE, value: string | number) {
     setLines((prev) => prev.map((l, i) => i === index ? { ...l, [field]: value } : l));
   }
@@ -194,12 +232,22 @@ export default function CreateOrder() {
         setBuyer((prev) => ({
           ...prev,
           external_id: lockedBuyerId || details.buyerEndpointId || prev.external_id,
-          name: details.buyerName || prev.name,
+          name:        details.buyerName       || prev.name,
+          email:       details.buyerEmail      || prev.email,
+          street:      details.buyerStreet     || prev.street,
+          city:        details.buyerCity       || prev.city,
+          country:     details.buyerCountry    || prev.country,
+          postal_code: details.buyerPostalCode || prev.postal_code,
         }));
         setSeller((prev) => ({
           ...prev,
-          external_id: details.sellerEndpointId || prev.external_id,
-          name: details.sellerName || prev.name,
+          external_id: details.sellerEndpointId  || prev.external_id,
+          name:        details.sellerName        || prev.name,
+          email:       details.sellerEmail       || prev.email,
+          street:      details.sellerStreet      || prev.street,
+          city:        details.sellerCity        || prev.city,
+          country:     details.sellerCountry     || prev.country,
+          postal_code: details.sellerPostalCode  || prev.postal_code,
         }));
         if (details.order_lines.length > 0) {
           setLines(details.order_lines.map((l) => ({
@@ -256,6 +304,10 @@ export default function CreateOrder() {
         };
         result = await createOrder(input);
       }
+      // Remember this seller for next time so it appears in the autofill dropdown
+      saveSeller(sharedFields.seller);
+      // Persist the user-chosen order name (if any) so the list can show it
+      if (orderName.trim()) setOrderName(result.orderID, orderName);
       navigate(`/orders/${result.orderID}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create order.');
@@ -297,9 +349,8 @@ export default function CreateOrder() {
                 <option value="">— Select a template —</option>
                 {templates.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.frequency} · every {t.recur_interval} · {t.currency}
+                    {getTemplateName(t.id)} · {t.frequency} · every {t.recur_interval} · {t.currency}
                     {t.recur_end_date ? ` · ends ${t.recur_end_date}` : ' · ongoing'}
-                    {' · '}{t.id.slice(0, 8)}…
                   </option>
                 ))}
               </select>
@@ -323,12 +374,66 @@ export default function CreateOrder() {
       </div>
 
       <PartySection label="Buyer (Your Organisation)" data={buyer} onChange={updateBuyer} lockExternalId={!!lockedBuyerId} />
+
+      {/* Saved seller picker — lets users re-use suppliers from previous orders */}
+      {savedSellers.length > 0 && (
+        <div className={s.card}>
+          <p className={s.sectionHeading}>Load a Saved Supplier</p>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className={s.formField} style={{ flex: '1 1 280px', minWidth: 200, marginBottom: 0 }}>
+              <label>Saved Suppliers</label>
+              <select
+                value={selectedSavedSellerId}
+                onChange={(e) => applySavedSeller(e.target.value)}
+              >
+                <option value="">— Select a saved supplier —</option>
+                {savedSellers.map((sv) => (
+                  <option key={sv.external_id} value={sv.external_id}>
+                    {sv.name} · {sv.external_id}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedSavedSellerId && (
+              <button
+                type="button"
+                className={s.btnSecondary}
+                onClick={() => {
+                  removeSeller(selectedSavedSellerId);
+                  setSelectedSavedSellerId('');
+                }}
+                style={{ marginBottom: 1 }}
+                title="Forget this supplier"
+              >
+                Forget
+              </button>
+            )}
+          </div>
+          <p style={{ marginTop: 10, fontSize: '0.78rem', color: '#94a3b8' }}>
+            Selecting a supplier pre-fills the seller fields below. You can still edit them.
+          </p>
+        </div>
+      )}
+
       <PartySection label="Seller (Supplier)" data={seller} onChange={updateSeller} />
 
       {/* Order details */}
       <div className={s.card}>
         <p className={s.sectionHeading}>Order Details</p>
         <div className={s.formGrid}>
+          <div className={s.formField} style={{ gridColumn: '1 / -1' }}>
+            <label>
+              Order Name{' '}
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 400 }}>
+                (optional — a friendly label shown in your order list)
+              </span>
+            </label>
+            <input
+              value={orderName}
+              onChange={(e) => setOrderNameInput(e.target.value)}
+              placeholder="e.g. Q2 Office Supplies"
+            />
+          </div>
           <div className={s.formField}>
             <label className={s.required}>Currency</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)}>

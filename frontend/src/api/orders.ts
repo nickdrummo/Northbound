@@ -67,8 +67,18 @@ export interface ParsedOrderLine {
 export interface ParsedOrderDetails {
   buyerName: string;
   buyerEndpointId: string;
+  buyerEmail: string;
+  buyerStreet: string;
+  buyerCity: string;
+  buyerCountry: string;
+  buyerPostalCode: string;
   sellerName: string;
   sellerEndpointId: string;
+  sellerEmail: string;
+  sellerStreet: string;
+  sellerCity: string;
+  sellerCountry: string;
+  sellerPostalCode: string;
   order_lines: ParsedOrderLine[];
 }
 
@@ -182,13 +192,27 @@ export async function fetchOrderDetails(id: string): Promise<ParsedOrderDetails>
   const text = await res.text();
   const doc = new DOMParser().parseFromString(text, 'application/xml');
 
-  // Party names + endpoint IDs (external_id)
+  // Party names, endpoint IDs, address, and contact info
   const buyerPartyEl = doc.getElementsByTagNameNS('*', 'BuyerCustomerParty')[0] ?? null;
   const sellerPartyEl = doc.getElementsByTagNameNS('*', 'SellerSupplierParty')[0] ?? null;
-  const buyerName = buyerPartyEl ? xmlText(buyerPartyEl, 'Name') : '';
-  const buyerEndpointId = buyerPartyEl ? xmlText(buyerPartyEl, 'EndpointID') : '';
-  const sellerName = sellerPartyEl ? xmlText(sellerPartyEl, 'Name') : '';
-  const sellerEndpointId = sellerPartyEl ? xmlText(sellerPartyEl, 'EndpointID') : '';
+
+  const parseParty = (el: Element | null) => {
+    if (!el) {
+      return { name: '', endpointId: '', email: '', street: '', city: '', country: '', postalCode: '' };
+    }
+    return {
+      name:       xmlText(el, 'Name'),
+      endpointId: xmlText(el, 'EndpointID'),
+      email:      xmlText(el, 'ElectronicMail'),
+      street:     xmlText(el, 'StreetName'),
+      city:       xmlText(el, 'CityName'),
+      country:    xmlText(el, 'IdentificationCode'),
+      postalCode: xmlText(el, 'PostalZone'),
+    };
+  };
+
+  const buyer = parseParty(buyerPartyEl);
+  const seller = parseParty(sellerPartyEl);
 
   // Order lines
   const lineItems = Array.from(doc.getElementsByTagNameNS('*', 'LineItem'));
@@ -203,7 +227,23 @@ export async function fetchOrderDetails(id: string): Promise<ParsedOrderDetails>
     };
   });
 
-  return { buyerName, buyerEndpointId, sellerName, sellerEndpointId, order_lines };
+  return {
+    buyerName: buyer.name,
+    buyerEndpointId: buyer.endpointId,
+    buyerEmail: buyer.email,
+    buyerStreet: buyer.street,
+    buyerCity: buyer.city,
+    buyerCountry: buyer.country,
+    buyerPostalCode: buyer.postalCode,
+    sellerName: seller.name,
+    sellerEndpointId: seller.endpointId,
+    sellerEmail: seller.email,
+    sellerStreet: seller.street,
+    sellerCity: seller.city,
+    sellerCountry: seller.country,
+    sellerPostalCode: seller.postalCode,
+    order_lines,
+  };
 }
 
 /**

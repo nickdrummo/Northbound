@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useOrder } from '../hooks/useOrder';
 import { useAuth } from '../context/AuthContext';
 import { useOrderStatus, OrderStatus } from '../hooks/useOrderStatus';
+import { useOrderNames } from '../hooks/useOrderNames';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import {
   cancelOrder,
@@ -63,7 +64,12 @@ export default function OrderDetail() {
   const { role } = useAuth();
   const { order, loading, error } = useOrder(id!);
   const { getStatus, updateStatus } = useOrderStatus();
+  const { names: orderNames, setOrderName } = useOrderNames();
   const { loading: ratesLoading, convert } = useExchangeRates();
+
+  // Inline rename state
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [cancelling, setCancelling]   = useState(false);
@@ -176,7 +182,9 @@ export default function OrderDetail() {
       <div className={s.pageHeader}>
         <div>
           <button className={s.backLink} onClick={() => navigate('/orders')}>← Back to Orders</button>
-          <h1 className={s.pageTitle} style={{ marginTop: 6 }}>Order Detail</h1>
+          <h1 className={s.pageTitle} style={{ marginTop: 6 }}>
+            {orderNames[order.id]?.trim() || 'Order Detail'}
+          </h1>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {/* Order status badge */}
@@ -259,6 +267,50 @@ export default function OrderDetail() {
       <div className={s.card}>
         <p className={s.sectionHeading}>Order Information</p>
         <div className={s.detailGrid}>
+          <div className={s.detailItem}>
+            <span className={s.detailLabel}>Order Name</span>
+            {renaming ? (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  placeholder="e.g. Q2 Office Supplies"
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className={s.btnSecondary}
+                  style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                  onClick={() => { setOrderName(order.id, nameDraft); setRenaming(false); }}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className={s.btnSecondary}
+                  style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                  onClick={() => setRenaming(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span className={s.detailValue}>
+                  {orderNames[order.id]?.trim() || <em style={{ color: '#94a3b8' }}>— unnamed —</em>}
+                </span>
+                <button
+                  type="button"
+                  className={s.backLink}
+                  style={{ fontSize: '0.75rem' }}
+                  onClick={() => { setNameDraft(orderNames[order.id] ?? ''); setRenaming(true); }}
+                >
+                  {orderNames[order.id]?.trim() ? 'Rename' : 'Add name'}
+                </button>
+              </div>
+            )}
+          </div>
           <div className={s.detailItem}>
             <span className={s.detailLabel}>Order ID</span>
             <span className={`${s.detailValue} ${s.mono}`}>{order.id}</span>

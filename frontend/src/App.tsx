@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppLayout from './components/layout/AppLayout';
 
@@ -34,32 +35,34 @@ function ProtectedLayout() {
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
+    <LanguageProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Protected routes */}
-          <Route element={<ProtectedLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/orders/new" element={<CreateOrder />} />
-            <Route path="/orders/:id" element={<OrderDetail />} />
-            <Route path="/orders/:id/edit" element={<EditOrder />} />
-            <Route path="/received-orders" element={<ReceivedOrders />} />
-            <Route path="/templates" element={<Templates />} />
-            <Route path="/templates/new" element={<CreateTemplate />} />
-            <Route path="/templates/:id/edit" element={<EditTemplate />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/settings" element={<Settings />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+            {/* Protected routes */}
+            <Route element={<ProtectedLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/orders/new" element={<CreateOrder />} />
+              <Route path="/orders/:id" element={<OrderDetail />} />
+              <Route path="/orders/:id/edit" element={<EditOrder />} />
+              <Route path="/received-orders" element={<ReceivedOrders />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/templates/new" element={<CreateTemplate />} />
+              <Route path="/templates/:id/edit" element={<EditTemplate />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/settings" element={<Settings />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }
 

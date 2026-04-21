@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { updateRecurringOrder, RecurringFrequency } from '../api/recurring';
 import { useOrder } from '../hooks/useOrder';
+import { useTemplateNames, loadTemplateName } from '../hooks/useTemplateNames';
+import { useLanguage } from '../context/LanguageContext';
 import s from '../styles/shared.module.css';
 
 const FREQUENCIES: RecurringFrequency[] = ['DAILY', 'WEEKLY', 'MONTHLY'];
@@ -10,7 +12,10 @@ export default function EditTemplate() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { order, loading, error: loadError } = useOrder(id!);
+  const { setTemplateName } = useTemplateNames();
+  const { t } = useLanguage();
 
+  const [templateName, setTemplateNameInput] = useState(() => loadTemplateName(id!) ?? '');
   const [frequency, setFrequency] = useState<RecurringFrequency>('MONTHLY');
   const [interval, setInterval] = useState(1);
   const [startDate, setStartDate] = useState('');
@@ -48,6 +53,7 @@ export default function EditTemplate() {
         currency,
         order_note: note || undefined,
       });
+      setTemplateName(id!, templateName);
       navigate('/templates');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update template.');
@@ -58,7 +64,7 @@ export default function EditTemplate() {
   if (loading) {
     return (
       <div className={s.page}>
-        <p className={s.loadingCell}>Loading template…</p>
+        <p className={s.loadingCell}>{t('editTemplate.loading')}</p>
       </div>
     );
   }
@@ -66,9 +72,9 @@ export default function EditTemplate() {
   if (loadError || !order) {
     return (
       <div className={s.page}>
-        <p className={s.error}>{loadError ?? 'Template not found.'}</p>
+        <p className={s.error}>{loadError ?? t('editTemplate.notFound')}</p>
         <button className={s.btnSecondary} onClick={() => navigate('/templates')}>
-          ← Back to Templates
+          {t('createTemplate.backToTemplates')}
         </button>
       </div>
     );
@@ -79,56 +85,72 @@ export default function EditTemplate() {
       <div className={s.pageHeader}>
         <div>
           <button type="button" className={s.backLink} onClick={() => navigate('/templates')}>
-            ← Back to Templates
+            {t('createTemplate.backToTemplates')}
           </button>
           <h1 className={s.pageTitle} style={{ marginTop: 6 }}>
-            Edit Template <span className={s.mono} style={{ fontSize: '0.85em', color: '#718096' }}>{id}</span>
+            {t('editTemplate.title')}
+            {templateName && <span style={{ color: '#64748b', fontWeight: 500 }}> · {templateName}</span>}
           </h1>
         </div>
       </div>
 
       <div className={s.card}>
-        <p className={s.sectionHeading}>Recurrence Settings</p>
+        <p className={s.sectionHeading}>{t('createTemplate.templateName')}</p>
+        <div className={s.formField} style={{ marginBottom: 0 }}>
+          <label>{t('createTemplate.nameLabel')}</label>
+          <input
+            value={templateName}
+            onChange={(e) => setTemplateNameInput(e.target.value)}
+            placeholder={t('createTemplate.namePlaceholder')}
+          />
+          <p style={{ marginTop: 6, fontSize: '0.78rem', color: '#94a3b8' }}>
+            {t('createTemplate.nameHelpEdit')}
+          </p>
+        </div>
+      </div>
+
+      <div className={s.card}>
+        <p className={s.sectionHeading}>{t('createTemplate.recurrenceSettings')}</p>
         <div className={s.formGrid}>
           <div className={s.formField}>
-            <label className={s.required}>Frequency</label>
+            <label className={s.required}>{t('createTemplate.frequency')}</label>
             <select value={frequency} onChange={(e) => setFrequency(e.target.value as RecurringFrequency)}>
               {FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
           <div className={s.formField}>
-            <label className={s.required}>Interval</label>
+            <label className={s.required}>{t('createTemplate.interval')}</label>
             <input
               type="number" min={1} value={interval} required
               onChange={(e) => setInterval(Number(e.target.value))}
             />
           </div>
           <div className={s.formField}>
-            <label className={s.required}>Start Date</label>
+            <label className={s.required}>{t('createTemplate.startDate')}</label>
             <input
               type="date" value={startDate} required
               onChange={(e) => setStartDate(e.target.value)}
             />
           </div>
           <div className={s.formField}>
-            <label>End Date <span style={{ color: '#a0aec0', fontWeight: 400 }}>(optional)</span></label>
+            <label>{t('createTemplate.endDate')} <span style={{ color: '#a0aec0', fontWeight: 400 }}>{t('createTemplate.endDateOptional')}</span></label>
             <input
               type="date" value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
             />
           </div>
           <div className={s.formField}>
-            <label className={s.required}>Currency</label>
+            <label className={s.required}>{t('createTemplate.currency')}</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {['AUD', 'USD', 'GBP', 'EUR', 'NZD'].map((c) => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div className={s.formField} style={{ gridColumn: '1 / -1' }}>
-            <label>Note</label>
+            <label>{t('createTemplate.note')}</label>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Optional note"
+              placeholder={t('createTemplate.notePlaceholder')}
             />
           </div>
         </div>
@@ -137,10 +159,10 @@ export default function EditTemplate() {
       {error && <p className={s.error}>{error}</p>}
       <div className={s.formActions}>
         <button type="button" className={s.btnSecondary} onClick={() => navigate('/templates')}>
-          Cancel
+          {t('common.cancel')}
         </button>
         <button type="submit" className={s.btnPrimary} disabled={submitting}>
-          {submitting ? 'Saving…' : 'Save Changes'}
+          {submitting ? t('editTemplate.saving') : t('editTemplate.saveChanges')}
         </button>
       </div>
     </form>
