@@ -1,6 +1,12 @@
 import { XMLBuilder } from 'fast-xml-parser';
 import { randomUUID } from 'crypto';
-import { OrderInput, UBLResult, Party, OrderLine } from './order.types';
+import { 
+    OrderInput, 
+    UBLResult, 
+    Party, 
+    OrderLine, 
+    InvoiceLine, 
+    InvoiceTotals } from './order.types';
 
 export interface OrderResponseUBLResult {
   responseID: string;
