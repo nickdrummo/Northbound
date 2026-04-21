@@ -124,3 +124,24 @@ export interface PartySession {
     order_lines: OrderLine[];
   }>;
 }
+
+export interface CounterpartySummary {
+  external_id: string;
+  name: string;
+  email?: string;
+  country?: string;
+}
+
+export interface PartyInsightsSession {
+  party: Party;
+  role: 'buyer' | 'seller';
+  orders: Array<{
+    order_id: string;
+    currency: string;
+    issue_date: string;
+    order_note: string | null;
+    is_recurring: boolean;
+    order_lines: OrderLine[];
+    counterparty: CounterpartySummary;
+  }>;
+}
