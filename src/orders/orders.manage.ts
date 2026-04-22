@@ -18,6 +18,7 @@ import {
 } from "./order.types";
 import { createClient } from '@supabase/supabase-js';
 import { generateUBL, generateOrderResponseUBL, generateInvoiceUBL } from './ubl.service';
+import { getTaxForCountry } from './tax';
 import { AppError } from '../errors';
 import dotenv from 'dotenv';
 
@@ -1121,8 +1122,10 @@ export async function generateInvoiceForOrder(
 
     if (linesError) throw new Error(`Failed to retrieve order lines: ${linesError.message}`);
 
-    // Compute invoice lines and totals
-    const taxRate = input.tax_rate ?? 0;
+    // resolve tax from seller country; explicit tax_rate overrides the rate only
+    const countryTax = getTaxForCountry(seller.country ?? '');
+    const taxRate = input.tax_rate ?? countryTax.rate;
+    const taxName = countryTax.name;
 
     const invoiceLines: InvoiceLine[] = (lines ?? []).map((line: any) => ({
         line_id: line.line_id,
@@ -1143,6 +1146,8 @@ export async function generateInvoiceForOrder(
         tax_amount: taxAmount,
         tax_inclusive_amount: taxInclusiveAmount,
         payable_amount: taxInclusiveAmount,
+        tax_rate: taxRate,
+        tax_name: taxName,
     };
 
     // Generate invoice ID and issue date
@@ -1182,6 +1187,7 @@ export async function generateInvoiceForOrder(
         invoiceLines,
         totals,
         taxRate,
+        taxName,
     };
     if (input.invoice_note !== undefined) {
         ublParams.invoiceNote = input.invoice_note;

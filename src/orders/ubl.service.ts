@@ -151,10 +151,11 @@ export function generateInvoiceUBL(params: {
   totals: InvoiceTotals;
   invoiceNote?: string;
   taxRate: number;
+  taxName: string;
 }): InvoiceUBLResult {
   const {
     invoiceID, orderID, issueDate, currency,
-    buyer, seller, invoiceLines, totals, invoiceNote, taxRate,
+    buyer, seller, invoiceLines, totals, invoiceNote, taxRate, taxName,
   } = params;
 
   const ublObject = {
@@ -190,7 +191,7 @@ export function generateInvoiceUBL(params: {
           'cac:TaxCategory': {
             'cbc:Percent': (taxRate * 100).toFixed(2),
             'cac:TaxScheme': {
-              'cbc:ID': 'GST',
+              'cbc:ID': taxName,
             },
           },
         },
