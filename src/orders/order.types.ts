@@ -127,10 +127,10 @@ export interface PartySession {
 
 
 export interface InvoiceInput {
-  order_id: string;          // reference to the originating order
-  issue_date?: string;       // defaults to today if omitted
+  order_id: string;
+  issue_date?: string;
   invoice_note?: string;
-  tax_rate?: number;         // e.g. 0.1 for 10% GST, defaults to 0
+  tax_rate?: number; // overrides the seller country lookup if provided
 }
 
 export interface InvoiceLine {
@@ -143,10 +143,12 @@ export interface InvoiceLine {
 }
 
 export interface InvoiceTotals {
-  line_extension_amount: number;   // sum of all line_totals (pre-tax)
-  tax_amount: number;              // line_extension_amount * tax_rate
-  tax_inclusive_amount: number;    // line_extension_amount + tax_amount
-  payable_amount: number;          // final amount due
+  line_extension_amount: number;
+  tax_amount: number;
+  tax_inclusive_amount: number;
+  payable_amount: number;
+  tax_rate: number;
+  tax_name: string;
 }
 
 export interface InvoiceResult {
