@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar as RechartsBar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts';
 import { useMyOrders } from '../hooks/useMyOrders';
 import { useOrderStatus, OrderStatus } from '../hooks/useOrderStatus';
 import { useOrderNames } from '../hooks/useOrderNames';
@@ -24,8 +39,16 @@ function monthLabel(dateStr: string): string {
   return isNaN(d.getTime()) ? 'Unknown' : d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
 }
 
-// Simple inline bar component
-function Bar({ value, max, color }: { value: number; max: number; color: string }) {
+function truncateLabel(label: string, max = 18): string {
+  const t = label.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+const PIE_COLORS = ['#4361ee', '#7c3aed', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#84cc16'];
+
+// Simple inline progress bar (not Recharts)
+function InlineBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max === 0 ? 0 : Math.round((value / max) * 100);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -130,6 +153,7 @@ export default function Analytics() {
 
     let totalBase = 0;
     const currencyTotals: Record<string, number> = {};
+    const monthlyValueBase: Record<string, number> = {};
     const productQty: Record<string, number> = {};
     const productValueBase: Record<string, number> = {};
     const counterpartyValueBase: Record<string, { name: string; value: number }> = {};
@@ -138,6 +162,9 @@ export default function Analytics() {
       const raw = orderValue(o.order_lines);
       const base = convert(raw, o.currency, baseCurrency);
       totalBase += base;
+
+      const monthKey = monthLabel(o.issue_date);
+      monthlyValueBase[monthKey] = (monthlyValueBase[monthKey] ?? 0) + base;
 
       currencyTotals[o.currency] = (currencyTotals[o.currency] ?? 0) + raw;
 
@@ -174,14 +201,77 @@ export default function Analytics() {
     const currencyTotalsSorted = Object.entries(currencyTotals)
       .sort(([, a], [, b]) => b - a);
 
+    const monthlyBaseSeries = Object.entries(monthlyValueBase)
+      .sort(([a], [b]) => new Date('01 ' + a).getTime() - new Date('01 ' + b).getTime())
+      .map(([month, total]) => ({ month, total: Math.round(total * 100) / 100 }));
+
     return {
       totalBase,
       currencyTotalsSorted,
       topProductsByQty,
       topProductsByValue,
       topCounterparties,
+      monthlyBaseSeries,
     };
   }, [insights, convert, baseCurrency]);
+
+  const chartData = useMemo(() => {
+    const ordersPerMonth = stats.sortedMonths.map(([month, count]) => ({ month, count }));
+
+    const statusSeries = (['pending', 'shipped', 'delivered'] as OrderStatus[])
+      .map((status) => ({
+        name: t(STATUS_KEYS[status]),
+        value: stats.statusCounts[status] ?? 0,
+        fill: STATUS_COLORS[status],
+      }))
+      .filter((d) => d.value > 0);
+
+    const currencyByCount = Object.entries(stats.currencyCounts)
+      .sort(([, a], [, b]) => b - a)
+      .map(([name, value], i) => ({
+        name,
+        value,
+        fill: PIE_COLORS[i % PIE_COLORS.length],
+      }));
+
+    const recurringFreq =
+      stats.recurring > 0
+        ? Object.entries(stats.freqCounts)
+            .sort(([, a], [, b]) => b - a)
+            .map(([freq, count]) => ({
+              name: t(`analytics.freq.${freq}`),
+              count,
+            }))
+        : [];
+
+    const topBuyersSellers = insightsStats.topCounterparties.map((cp) => ({
+      name: truncateLabel(cp.name, 20),
+      value: Math.round(cp.value * 100) / 100,
+    }));
+
+    const topProductsQty = insightsStats.topProductsByQty.map(([product, qty]) => ({
+      name: truncateLabel(product, 22),
+      quantity: qty,
+    }));
+
+    const topProductsValue = insightsStats.topProductsByValue.map(([product, val]) => ({
+      name: truncateLabel(product, 22),
+      value: Math.round(val * 100) / 100,
+    }));
+
+    return {
+      ordersPerMonth,
+      statusSeries,
+      currencyByCount,
+      recurringFreq,
+      monthlyValue: insightsStats.monthlyBaseSeries,
+      topBuyersSellers,
+      topProductsQty,
+      topProductsValue,
+    };
+  }, [stats, insightsStats, t]);
+
+  const chartWrap = { width: '100%', height: 280 } as const;
 
   if (loading) return <div className={s.page}><p className={s.loadingCell}>{t('analytics.loading')}</p></div>;
   if (error)   return <div className={s.page}><p className={s.error}>{error}</p></div>;
@@ -221,6 +311,229 @@ export default function Analytics() {
         </div>
       ) : (
         <>
+          {/* ── Visual reports (charts first) ── */}
+          <div style={{ marginBottom: 24 }}>
+            <p className={s.sectionHeading} style={{ marginBottom: 16 }}>
+              Report overview
+            </p>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
+                gap: 20,
+              }}
+            >
+              <div className={s.card}>
+                <p className={s.sectionHeading}>{t('analytics.ordersPerMonth')}</p>
+                <div style={chartWrap}>
+                  {chartData.ordersPerMonth.length === 0 ? (
+                    <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>No data.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData.ordersPerMonth} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} width={36} />
+                        <Tooltip
+                          contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }}
+                          labelStyle={{ color: '#334155' }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="count"
+                          name="Orders"
+                          stroke="#4361ee"
+                          strokeWidth={2}
+                          dot={{ r: 4, fill: '#4361ee' }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              <div className={s.card}>
+                <p className={s.sectionHeading}>
+                  {role === 'seller' ? 'Revenue by month' : 'Spend by month'} ({baseCurrency})
+                </p>
+                <div style={chartWrap}>
+                  {insightsLoading || fxLoading || !rates ? (
+                    <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>Loading…</p>
+                  ) : chartData.monthlyValue.length === 0 ? (
+                    <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>
+                      No order value data yet.
+                    </p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData.monthlyValue} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} />
+                        <YAxis tick={{ fontSize: 11, fill: '#64748b' }} width={48} />
+                        <Tooltip
+                          contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }}
+                          formatter={(v: number) => [`${v.toFixed(2)} ${baseCurrency}`, 'Total']}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="total"
+                          name={baseCurrency}
+                          stroke="#7c3aed"
+                          strokeWidth={2}
+                          dot={{ r: 4, fill: '#7c3aed' }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              <div className={s.card}>
+                <p className={s.sectionHeading}>{t('analytics.byStatus')}</p>
+                <div style={chartWrap}>
+                  {chartData.statusSeries.length === 0 ? (
+                    <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>No status data.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={chartData.statusSeries}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={48}
+                          outerRadius={88}
+                          paddingAngle={2}
+                          label={({ name, percent }) =>
+                            `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                          }
+                        >
+                          {chartData.statusSeries.map((entry, i) => (
+                            <Cell key={i} fill={entry.fill} stroke="#fff" strokeWidth={1} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              <div className={s.card}>
+                <p className={s.sectionHeading}>{t('analytics.byCurrency')}</p>
+                <div style={chartWrap}>
+                  {chartData.currencyByCount.length === 0 ? (
+                    <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>No data.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={chartData.currencyByCount}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={44}
+                          outerRadius={88}
+                          paddingAngle={2}
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          {chartData.currencyByCount.map((entry, i) => (
+                            <Cell key={i} fill={entry.fill} stroke="#fff" strokeWidth={1} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              {chartData.topBuyersSellers.length > 0 && (
+                <div className={s.card}>
+                  <p className={s.sectionHeading}>
+                    {role === 'seller' ? 'Top buyers' : 'Top sellers'} ({baseCurrency})
+                  </p>
+                  <div style={chartWrap}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={chartData.topBuyersSellers}
+                        layout="vertical"
+                        margin={{ top: 8, right: 16, left: 4, bottom: 8 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} />
+                        <YAxis type="category" dataKey="name" width={92} tick={{ fontSize: 10, fill: '#64748b' }} />
+                        <Tooltip
+                          contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }}
+                          formatter={(v: number) => [`${v.toFixed(2)} ${baseCurrency}`, 'Total']}
+                        />
+                        <RechartsBar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} maxBarSize={32} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {chartData.topProductsQty.length > 0 && (
+                <div className={s.card}>
+                  <p className={s.sectionHeading}>Top products by quantity</p>
+                  <div style={chartWrap}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData.topProductsQty} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} angle={-28} textAnchor="end" height={56} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} width={36} />
+                        <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                        <RechartsBar dataKey="quantity" fill="#7c3aed" radius={[4, 4, 0, 0]} maxBarSize={48} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {chartData.topProductsValue.length > 0 && fxLoading === false && rates && (
+                <div className={s.card}>
+                  <p className={s.sectionHeading}>Top products by value ({baseCurrency})</p>
+                  <div style={chartWrap}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData.topProductsValue} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} angle={-28} textAnchor="end" height={56} />
+                        <YAxis tick={{ fontSize: 11, fill: '#64748b' }} width={44} />
+                        <Tooltip
+                          contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }}
+                          formatter={(v: number) => [`${v.toFixed(2)} ${baseCurrency}`, 'Value']}
+                        />
+                        <RechartsBar dataKey="value" fill="#4361ee" radius={[4, 4, 0, 0]} maxBarSize={48} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {chartData.recurringFreq.length > 0 && (
+                <div className={s.card}>
+                  <p className={s.sectionHeading}>{t('analytics.recurringFrequency')}</p>
+                  <div style={chartWrap}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData.recurringFreq} margin={{ top: 8, right: 8, left: 0, bottom: 32 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} width={36} />
+                        <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                        <RechartsBar dataKey="count" fill="#a855f7" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* ── Top stat cards ── */}
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             <StatCard label={t('analytics.stat.totalOrders')} value={stats.total} />
@@ -279,7 +592,7 @@ export default function Analytics() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                           <span style={{ fontSize: '0.82rem', color: '#374151', fontWeight: 500 }}>{product}</span>
                         </div>
-                        <Bar value={qty} max={Math.max(...insightsStats.topProductsByQty.map(([, v]) => v), 1)} color="#7c3aed" />
+                        <InlineBar value={qty} max={Math.max(...insightsStats.topProductsByQty.map(([, v]) => v), 1)} color="#7c3aed" />
                       </div>
                     ))}
                   </div>
@@ -299,7 +612,7 @@ export default function Analytics() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                           <span style={{ fontSize: '0.82rem', color: '#374151', fontWeight: 500 }}>{product}</span>
                         </div>
-                        <Bar value={Math.round(value)} max={Math.max(...insightsStats.topProductsByValue.map(([, v]) => Math.round(v)), 1)} color="#4361ee" />
+                        <InlineBar value={Math.round(value)} max={Math.max(...insightsStats.topProductsByValue.map(([, v]) => Math.round(v)), 1)} color="#4361ee" />
                       </div>
                     ))}
                   </div>
@@ -318,7 +631,7 @@ export default function Analytics() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                       <span style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>{t(STATUS_KEYS[status])}</span>
                     </div>
-                    <Bar value={stats.statusCounts[status] ?? 0} max={maxStatus} color={STATUS_COLORS[status]} />
+                    <InlineBar value={stats.statusCounts[status] ?? 0} max={maxStatus} color={STATUS_COLORS[status]} />
                   </div>
                 ))}
               </div>
@@ -335,7 +648,7 @@ export default function Analytics() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>{currency}</span>
                       </div>
-                      <Bar value={count} max={maxCurr} color="#4361ee" />
+                      <InlineBar value={count} max={maxCurr} color="#4361ee" />
                     </div>
                   ))}
               </div>
@@ -355,7 +668,7 @@ export default function Analytics() {
                             {t(`analytics.freq.${freq}`)}
                           </span>
                         </div>
-                        <Bar value={count} max={stats.recurring} color="#7c3aed" />
+                        <InlineBar value={count} max={stats.recurring} color="#7c3aed" />
                       </div>
                     ))}
                   <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>
@@ -378,7 +691,7 @@ export default function Analytics() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                       <span style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>{month}</span>
                     </div>
-                    <Bar value={count} max={maxMonth} color="#4361ee" />
+                    <InlineBar value={count} max={maxMonth} color="#4361ee" />
                   </div>
                 ))}
               </div>
