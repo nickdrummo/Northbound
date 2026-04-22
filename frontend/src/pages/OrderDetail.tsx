@@ -205,7 +205,7 @@ export default function OrderDetail() {
               Edit Order
             </button>
           )}
-          {!order.is_recurring && role !== 'seller' && (
+          {!order.is_recurring && role !== 'seller' && orderStatus === 'pending' && (
             <button className={s.btnDanger} onClick={() => setShowConfirm(true)}>
               Cancel Order
             </button>
