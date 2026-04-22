@@ -18,11 +18,29 @@ export interface PartyOrder {
   order_lines: OrderLine[];
 }
 
+export interface CounterpartySummary {
+  external_id: string;
+  name: string;
+  email?: string;
+  country?: string;
+}
+
+export interface PartyInsightsOrder extends PartyOrder {
+  counterparty: CounterpartySummary;
+}
+
 /** Full session for a buyer or seller — list of their orders with lines */
 export interface PartySession {
   party: Party;
   role: 'buyer' | 'seller';
   orders: PartyOrder[];
+}
+
+/** Session for analytics insights — includes counterparty per order */
+export interface PartyInsightsSession {
+  party: Party;
+  role: 'buyer' | 'seller';
+  orders: PartyInsightsOrder[];
 }
 
 export interface CurrencyBreakdown {
@@ -86,5 +104,17 @@ export async function fetchSellerReport(externalId: string): Promise<PartyReport
 export async function fetchBuyerReport(externalId: string): Promise<PartyReport | null> {
   return partiesFetch<PartyReport>(
     `/parties/buyers/${encodeURIComponent(externalId)}/report`,
+  );
+}
+
+export async function fetchSellerInsights(externalId: string): Promise<PartyInsightsSession | null> {
+  return partiesFetch<PartyInsightsSession>(
+    `/parties/sellers/${encodeURIComponent(externalId)}/insights`,
+  );
+}
+
+export async function fetchBuyerInsights(externalId: string): Promise<PartyInsightsSession | null> {
+  return partiesFetch<PartyInsightsSession>(
+    `/parties/buyers/${encodeURIComponent(externalId)}/insights`,
   );
 }

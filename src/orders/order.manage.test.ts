@@ -6,6 +6,7 @@ import {
   cancelOrder,
   patchOrderDetail,
   generateOrderResponseForOrder,
+  getPartyInsightsSession,
 } from './orders.manage';
 import { createClient } from '@supabase/supabase-js';
 import { generateUBL } from './ubl.service';
@@ -439,6 +440,145 @@ describe('updateOrderPartyCountry', () => {
             updateOrderPartyCountry(testOrderID, 'buyer', 'CN')
         ).rejects.toThrow('Failed to update buyer country: DB update failed');
     });
+});
+
+describe('getPartyInsightsSession', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'test-key';
+  });
+
+  it('returns null when party not found', async () => {
+    (createClient as jest.Mock).mockReturnValue({
+      from: (table: string) => {
+        if (table === 'parties') {
+          return {
+            select: () => ({
+              eq: () => ({
+                single: async () => ({ data: null, error: { message: 'Not found' } }),
+              }),
+            }),
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    });
+
+    await expect(getPartyInsightsSession('missing', 'buyer')).resolves.toBeNull();
+  });
+
+  it('attaches counterparty details to each order', async () => {
+    const buyerPartyRow = {
+      id: 'party-buyer-uuid',
+      external_id: 'buyer-ext-1',
+      name: 'Buyer Co',
+      email: 'buyer@example.com',
+      street: null,
+      city: 'Sydney',
+      country: 'AU',
+      postal_code: null,
+    };
+
+    const sellerPartyRow = {
+      id: 'party-seller-uuid',
+      external_id: 'seller-ext-1',
+      name: 'Seller Co',
+      email: 'seller@example.com',
+      country: 'AU',
+    };
+
+    const orderRows = [
+      {
+        id: 'order-1',
+        buyer_id: 'party-buyer-uuid',
+        seller_id: 'party-seller-uuid',
+        currency: 'AUD',
+        issue_date: '2024-03-01',
+        order_note: null,
+        is_recurring: false,
+      },
+    ];
+
+    const lines = [
+      {
+        order_id: 'order-1',
+        line_id: '1',
+        description: 'Widget A',
+        quantity: 2,
+        unit_price: 50,
+        unit_code: 'EA',
+      },
+    ];
+
+    (createClient as jest.Mock).mockReturnValue({
+      from: (table: string) => {
+        if (table === 'parties') {
+          return {
+            select: () => ({
+              eq: (col: string, value: string) => ({
+                single: async () => {
+                  if (col === 'external_id' && value === 'buyer-ext-1') {
+                    return { data: buyerPartyRow, error: null };
+                  }
+                  return { data: null, error: { message: 'Not found' } };
+                },
+              }),
+              in: async (col: string, ids: string[]) => {
+                if (col === 'id' && ids.includes('party-seller-uuid')) {
+                  return { data: [sellerPartyRow], error: null };
+                }
+                return { data: [], error: null };
+              },
+            }),
+          };
+        }
+
+        if (table === 'orders') {
+          return {
+            select: () => ({
+              eq: (col: string, value: string) => ({
+                order: async () => {
+                  if (col === 'buyer_id' && value === 'party-buyer-uuid') {
+                    return { data: orderRows, error: null };
+                  }
+                  return { data: [], error: null };
+                },
+              }),
+            }),
+          };
+        }
+
+        if (table === 'order_lines') {
+          return {
+            select: () => ({
+              in: async (col: string, ids: string[]) => {
+                if (col === 'order_id' && ids.includes('order-1')) {
+                  return { data: lines, error: null };
+                }
+                return { data: [], error: null };
+              },
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    });
+
+    const result = await getPartyInsightsSession('buyer-ext-1', 'buyer');
+    expect(result).not.toBeNull();
+    expect(result?.orders[0]).toMatchObject({
+      order_id: 'order-1',
+      currency: 'AUD',
+      counterparty: {
+        external_id: 'seller-ext-1',
+        name: 'Seller Co',
+        email: 'seller@example.com',
+      },
+    });
+    expect(result?.orders[0].order_lines).toHaveLength(1);
+  });
 });
 
 describe('patchOrderDetail', () => {

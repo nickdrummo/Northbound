@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { ok, fail } from '../errors';
-import { getOrdersByParty, getPartyReport } from '../orders/orders.manage';
+import { getOrdersByParty, getPartyInsightsSession, getPartyReport } from '../orders/orders.manage';
 
 const router = Router();
 
@@ -98,6 +98,33 @@ router.get('/buyers/:externalID/report', async (req: Request, res: Response) => 
     }
 });
 
+// GET /parties/buyers/:externalID/insights
+router.get('/buyers/:externalID/insights', async (req: Request, res: Response) => {
+    if (!supabaseGuard(res)) return;
+
+    try {
+        const result = await getPartyInsightsSession(String(req.params.externalID), 'buyer');
+
+        if (!result) {
+            return res.status(404).json(
+                fail('Buyer not found', {
+                    code: 'PARTY_NOT_FOUND',
+                    message: 'No buyer with the given external ID exists.',
+                })
+            );
+        }
+
+        return res.status(200).json(ok('Insights generated successfully', result));
+    } catch (err) {
+        return res.status(500).json(
+            fail('Failed to generate insights', {
+                code: 'INSIGHTS_ERROR',
+                message: err instanceof Error ? err.message : 'Unknown error',
+            })
+        );
+    }
+});
+
 // GET /parties/sellers/:externalID/report
 router.get('/sellers/:externalID/report', async (req: Request, res: Response) => {
     if (!supabaseGuard(res)) return;
@@ -119,6 +146,33 @@ router.get('/sellers/:externalID/report', async (req: Request, res: Response) =>
         return res.status(500).json(
             fail('Failed to generate report', {
                 code: 'REPORT_ERROR',
+                message: err instanceof Error ? err.message : 'Unknown error',
+            })
+        );
+    }
+});
+
+// GET /parties/sellers/:externalID/insights
+router.get('/sellers/:externalID/insights', async (req: Request, res: Response) => {
+    if (!supabaseGuard(res)) return;
+
+    try {
+        const result = await getPartyInsightsSession(String(req.params.externalID), 'seller');
+
+        if (!result) {
+            return res.status(404).json(
+                fail('Seller not found', {
+                    code: 'PARTY_NOT_FOUND',
+                    message: 'No seller with the given external ID exists.',
+                })
+            );
+        }
+
+        return res.status(200).json(ok('Insights generated successfully', result));
+    } catch (err) {
+        return res.status(500).json(
+            fail('Failed to generate insights', {
+                code: 'INSIGHTS_ERROR',
                 message: err instanceof Error ? err.message : 'Unknown error',
             })
         );

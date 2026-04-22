@@ -8,6 +8,8 @@ import {
     OrderDetailPatch,
     OrderResponseInput,
     PartySession,
+    PartyInsightsSession,
+    CounterpartySummary,
     PartyReport,
     PartyOrderSummary,
     CurrencyBreakdown,
@@ -1020,6 +1022,129 @@ export async function getOrdersByParty(
             is_recurring: order.is_recurring ?? false,
             order_lines: linesByOrderId[order.id] ?? [],
         })),
+    };
+}
+
+// Returns the order history for a party, including counterparty summary per order (for analytics/insights)
+export async function getPartyInsightsSession(
+    externalID: string,
+    role: 'buyer' | 'seller'
+): Promise<PartyInsightsSession | null> {
+    const supabase = getSupabase();
+
+    const { data: partyRow, error: partyErr } = await supabase
+        .from('parties')
+        .select('*')
+        .eq('external_id', externalID)
+        .single();
+
+    if (partyErr || !partyRow) {
+        return null;
+    }
+
+    const column = role === 'buyer' ? 'buyer_id' : 'seller_id';
+    const counterpartyColumn = role === 'buyer' ? 'seller_id' : 'buyer_id';
+
+    const { data: orders, error: ordersErr } = await supabase
+        .from('orders')
+        .select('*')
+        .eq(column, partyRow.id)
+        .order('issue_date', { ascending: true });
+
+    if (ordersErr) {
+        throw new Error(`Failed to retrieve orders: ${ordersErr.message}`);
+    }
+
+    const orderRows = orders ?? [];
+    const orderIds = orderRows.map((o: any) => o.id);
+
+    // Fetch all order lines in one query
+    let linesByOrderId: Record<string, OrderLine[]> = {};
+    if (orderIds.length > 0) {
+        const { data: lines, error: linesErr } = await supabase
+            .from('order_lines')
+            .select('*')
+            .in('order_id', orderIds);
+
+        if (linesErr) {
+            throw new Error(`Failed to retrieve order lines: ${linesErr.message}`);
+        }
+
+        for (const line of lines ?? []) {
+            if (!linesByOrderId[line.order_id]) {
+                linesByOrderId[line.order_id] = [];
+            }
+            (linesByOrderId[line.order_id] as OrderLine[]).push({
+                line_id: line.line_id,
+                description: line.description,
+                quantity: line.quantity,
+                unit_price: line.unit_price,
+                unit_code: line.unit_code,
+            });
+        }
+    }
+
+    // Fetch all counterparties referenced by these orders in one query
+    const counterpartyIds = Array.from(
+        new Set(
+            orderRows
+                .map((o: any) => o[counterpartyColumn])
+                .filter((id: unknown) => typeof id === 'string' && id.trim() !== '')
+        )
+    );
+
+    const counterpartyById: Record<string, CounterpartySummary> = {};
+    if (counterpartyIds.length > 0) {
+        const { data: parties, error: partiesErr } = await supabase
+            .from('parties')
+            .select('*')
+            .in('id', counterpartyIds);
+
+        if (partiesErr) {
+            throw new Error(`Failed to retrieve counterparties: ${partiesErr.message}`);
+        }
+
+        for (const p of parties ?? []) {
+            counterpartyById[p.id] = {
+                external_id: p.external_id,
+                name: p.name,
+                email: p.email ?? undefined,
+                country: p.country ?? undefined,
+            };
+        }
+    }
+
+    const party: Party = {
+        external_id: partyRow.external_id,
+        name: partyRow.name,
+        email: partyRow.email ?? undefined,
+        street: partyRow.street ?? undefined,
+        city: partyRow.city ?? undefined,
+        country: partyRow.country ?? undefined,
+        postal_code: partyRow.postal_code ?? undefined,
+    };
+
+    return {
+        party,
+        role,
+        orders: orderRows.map((order: any) => {
+            const cpId = order[counterpartyColumn] as string | null | undefined;
+            const counterparty =
+                (cpId ? counterpartyById[cpId] : undefined) ?? {
+                    external_id: 'UNKNOWN',
+                    name: 'Unknown',
+                };
+
+            return {
+                order_id: order.id,
+                currency: order.currency,
+                issue_date: order.issue_date,
+                order_note: order.order_note ?? null,
+                is_recurring: order.is_recurring ?? false,
+                order_lines: linesByOrderId[order.id] ?? [],
+                counterparty,
+            };
+        }),
     };
 }
 

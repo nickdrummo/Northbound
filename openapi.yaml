@@ -190,8 +190,6 @@ paths:
       tags: [Auth]
       summary: User Logout
       description: Logs out the current user by revoking the provided bearer token.
-      requestBody:
-        required: false
       responses:
         "200":
           description: Logout successful
@@ -1032,6 +1030,74 @@ paths:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
 
+  /parties/buyers/{externalID}/insights:
+    get:
+      tags: [Parties]
+      summary: Analytics insights session for a buyer
+      description: |
+        Returns the buyer's orders with order lines and a counterparty summary (seller) per order.
+        Intended for analytics dashboards (top products, top sellers, etc.).
+      parameters:
+        - name: externalID
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The buyer's external_id
+      responses:
+        "200":
+          description: Insights generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartyInsightsSessionResponse"
+        "404":
+          description: No buyer with the given external ID exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Supabase not configured or query failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
+  /parties/sellers/{externalID}/insights:
+    get:
+      tags: [Parties]
+      summary: Analytics insights session for a seller
+      description: |
+        Returns the seller's orders with order lines and a counterparty summary (buyer) per order.
+        Intended for analytics dashboards (top products, top buyers, etc.).
+      parameters:
+        - name: externalID
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The seller's external_id
+      responses:
+        "200":
+          description: Insights generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartyInsightsSessionResponse"
+        "404":
+          description: No seller with the given external ID exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Supabase not configured or query failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
   /v2/orders/{orderID}/party-country:
     patch:
       tags:
@@ -1803,6 +1869,53 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/PartySessionData"
+
+    CounterpartySummary:
+      type: object
+      properties:
+        external_id:
+          type: string
+          example: seller-ext-1
+        name:
+          type: string
+          example: Seller Co
+        email:
+          type: string
+          nullable: true
+          example: seller@example.com
+        country:
+          type: string
+          nullable: true
+          example: AU
+
+    PartyInsightsOrder:
+      allOf:
+        - $ref: "#/components/schemas/PartySessionOrder"
+        - type: object
+          properties:
+            counterparty:
+              $ref: "#/components/schemas/CounterpartySummary"
+
+    PartyInsightsSessionData:
+      type: object
+      properties:
+        party:
+          $ref: "#/components/schemas/Party"
+        role:
+          type: string
+          enum: [buyer, seller]
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartyInsightsOrder"
+
+    PartyInsightsSessionResponse:
+      allOf:
+        - $ref: "#/components/schemas/StandardResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/PartyInsightsSessionData"
 
     PartyOrderSummary:
       type: object
