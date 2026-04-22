@@ -838,7 +838,66 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StandardErrorResponse"
-            
+  
+  /orders/{orderID}/invoice:
+    post:
+      tags: [Orders]
+      summary: Generate UBL Invoice from an order
+      description: >
+        Generates a UBL 2.1 Invoice document from a stored order. Pulls buyer, seller,
+        and line items from storage, computes totals (with optional tax), and returns
+        a full invoice with UBL XML. Does not persist the invoice document.
+        Same path under `/v1/orders/{orderID}/invoice`.
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceRequest"
+            examples:
+              noTax:
+                summary: Invoice with no tax
+                value:
+                  issue_date: "2026-04-22"
+                  invoice_note: Thank you for your order
+              withGST:
+                summary: Invoice with 10% GST
+                value:
+                  issue_date: "2026-04-22"
+                  tax_rate: 0.1
+                  invoice_note: GST inclusive invoice
+      responses:
+        "201":
+          description: UBL Invoice generated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/StandardResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/InvoiceResult"
+        "404":
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+        "500":
+          description: Supabase not configured or invoice generation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardErrorResponse"
+
   /parties/buyers/{externalID}/orders:
     get:
       tags: [Parties]
@@ -1935,3 +1994,99 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/PartyReportData"
+
+    InvoiceRequest:
+      type: object
+      description: All fields are optional. order_id is taken from the path parameter.
+      properties:
+        issue_date:
+          type: string
+          format: date
+          description: Invoice issue date (YYYY-MM-DD); defaults to today if omitted
+          example: "2026-04-22"
+        invoice_note:
+          type: string
+          description: Optional free-text note embedded in the UBL document
+          example: Thank you for your order
+        tax_rate:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Tax rate as a decimal (e.g. 0.1 for 10% GST); defaults to 0
+          example: 0.1
+
+    InvoiceLineItem:
+      type: object
+      properties:
+        line_id:
+          type: string
+          example: "1"
+        description:
+          type: string
+          example: Wireless Keyboard
+        quantity:
+          type: number
+          example: 2
+        unit_price:
+          type: number
+          example: 49.99
+        unit_code:
+          type: string
+          example: EA
+        line_total:
+          type: number
+          description: quantity * unit_price (pre-calculated)
+          example: 99.98
+
+    InvoiceTotals:
+      type: object
+      properties:
+        line_extension_amount:
+          type: number
+          description: Sum of all line totals before tax
+          example: 99.98
+        tax_amount:
+          type: number
+          description: Tax applied to line_extension_amount
+          example: 10.00
+        tax_inclusive_amount:
+          type: number
+          description: line_extension_amount + tax_amount
+          example: 109.98
+        payable_amount:
+          type: number
+          description: Final amount due
+          example: 109.98
+
+    InvoiceResult:
+      type: object
+      properties:
+        invoice_id:
+          type: string
+          format: uuid
+          description: Generated UUID for this invoice
+        order_id:
+          type: string
+          format: uuid
+          description: The originating order ID
+        issue_date:
+          type: string
+          format: date
+        currency:
+          type: string
+          example: AUD
+        buyer:
+          $ref: "#/components/schemas/Party"
+        seller:
+          $ref: "#/components/schemas/Party"
+        invoice_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        totals:
+          $ref: "#/components/schemas/InvoiceTotals"
+        invoice_note:
+          type: string
+        ubl_xml:
+          type: string
+          description: Generated UBL 2.1 Invoice XML document

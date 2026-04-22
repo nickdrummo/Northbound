@@ -23,6 +23,7 @@ import {
   generateOrderResponseForOrder,
   syncDispatchAdviceXml,
   upsertDispatchAdvicesForOrder,
+  generateInvoiceForOrder,
 } from './orders.manage';
 import { validateRecurringOrderInput } from '../validation/validateRecurringOrderInput';
 import type { OrderResponseInput } from './order.types';
@@ -689,4 +690,41 @@ router.patch('/:orderID/party-country', async (req: Request, res: Response) => {
   }
 });
 
+// POST /orders/:id/invoice
+router.post('/:id/invoice', async (req: Request, res: Response): Promise<void> => {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    res.status(500).json(
+      fail('Failed to generate invoice', {
+        code: 'INVOICE_ERROR',
+        message: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set',
+      })
+    );
+    return;
+  }
+
+  try {
+    const result = await generateInvoiceForOrder(String(req.params.id), req.body);
+
+    if (result === null) {
+      res.status(404).json(
+        fail('Order not found', {
+          code: 'ORDER_NOT_FOUND',
+          message: 'Order with the given  ID does not exist.',
+        })
+      );
+      return;
+    }
+
+    res.status(201).json(
+      ok('UBL Invoice generated successfully.', result)
+    );
+  } catch (err: unknown) {
+    res.status(500).json(
+      fail('Failed to generate invoice', {
+        code: 'INVOICE_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      })
+    );
+  }
+});
 export default router;

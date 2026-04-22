@@ -46,6 +46,12 @@ const COUNTRIES: { code: string; name: string }[] = [
 
 const DISPLAY_CURRENCIES = ['AUD', 'USD', 'GBP', 'EUR', 'NZD', 'CAD', 'SGD', 'JPY', 'CNY', 'INR'];
 
+const TAX_RATES: Record<string, { rate: number; name: string }> = {
+  AU: { rate: 0.10, name: 'GST' },
+  NZ: { rate: 0.15, name: 'GST' },
+  GB: { rate: 0.20, name: 'VAT' },
+};
+
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending:   'Pending',
   shipped:   'Shipped',
@@ -171,6 +177,11 @@ export default function OrderDetail() {
     0,
   );
 
+  const effectiveSellerCountry = (updatedParties?.seller.country ?? details?.sellerCountry ?? '').toUpperCase();
+  const applicableTax = TAX_RATES[effectiveSellerCountry] ?? null;
+  const taxAmount     = applicableTax ? Math.round(grandTotal * applicableTax.rate * 100) / 100 : 0;
+  const totalInclTax  = applicableTax ? Math.round((grandTotal + taxAmount) * 100) / 100 : grandTotal;
+
   const orderStatus = getStatus(order.id);
   const isSeller    = role === 'seller';
 
@@ -205,7 +216,7 @@ export default function OrderDetail() {
               Edit Order
             </button>
           )}
-          {!order.is_recurring && role !== 'seller' && (
+          {orderStatus === 'pending' && (
             <button className={s.btnDanger} onClick={() => setShowConfirm(true)}>
               Cancel Order
             </button>
@@ -482,18 +493,33 @@ export default function OrderDetail() {
             </tbody>
             <tfoot>
               <tr>
-                <td
-                  colSpan={5}
-                  style={{ textAlign: 'right', fontWeight: 700, paddingTop: 14, borderTop: '2px solid #e8edf5', fontSize: '0.875rem', color: '#475569' }}
-                >
-                  Grand Total{!isSameCurrency ? ` (${toCurrency})` : ''}
+                <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700, paddingTop: 14, borderTop: '2px solid #e8edf5', fontSize: '0.875rem', color: '#475569' }}>
+                  {applicableTax ? 'Subtotal' : `Grand Total${!isSameCurrency ? ` (${toCurrency})` : ''}`}
                 </td>
-                <td
-                  style={{ textAlign: 'right', fontWeight: 700, paddingTop: 14, borderTop: '2px solid #e8edf5', color: '#4361ee', fontSize: '1rem' }}
-                >
+                <td style={{ textAlign: 'right', fontWeight: 700, paddingTop: 14, borderTop: '2px solid #e8edf5', color: '#4361ee', fontSize: '1rem' }}>
                   {toCurrency} {grandTotal.toFixed(2)}
                 </td>
               </tr>
+              {applicableTax && (
+                <>
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'right', fontSize: '0.875rem', color: '#475569', paddingTop: 6 }}>
+                      {applicableTax.name} ({(applicableTax.rate * 100).toFixed(0)}%)
+                    </td>
+                    <td style={{ textAlign: 'right', color: '#64748b', paddingTop: 6 }}>
+                      {toCurrency} {taxAmount.toFixed(2)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700, fontSize: '0.875rem', color: '#475569', paddingTop: 6 }}>
+                      Total incl. {applicableTax.name}{!isSameCurrency ? ` (${toCurrency})` : ''}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#4361ee', fontSize: '1rem', paddingTop: 6 }}>
+                      {toCurrency} {totalInclTax.toFixed(2)}
+                    </td>
+                  </tr>
+                </>
+              )}
             </tfoot>
           </table>
         </div>

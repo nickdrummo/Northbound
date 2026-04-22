@@ -145,3 +145,41 @@ export interface PartyInsightsSession {
     counterparty: CounterpartySummary;
   }>;
 }
+
+export interface InvoiceInput {
+  order_id: string;
+  issue_date?: string;
+  invoice_note?: string;
+  tax_rate?: number; // overrides the seller country lookup if provided
+}
+
+export interface InvoiceLine {
+  line_id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  unit_code: string;
+  line_total: number;        // quantity * unit_price (pre-calculated)
+}
+
+export interface InvoiceTotals {
+  line_extension_amount: number;
+  tax_amount: number;
+  tax_inclusive_amount: number;
+  payable_amount: number;
+  tax_rate: number;
+  tax_name: string;
+}
+
+export interface InvoiceResult {
+  invoice_id: string;
+  order_id: string;
+  issue_date: string;
+  currency: string;
+  buyer: Party;
+  seller: Party;
+  invoice_lines: InvoiceLine[];
+  totals: InvoiceTotals;
+  invoice_note?: string;
+  ubl_xml: string;
+}

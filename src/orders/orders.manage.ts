@@ -13,9 +13,14 @@ import {
     PartyReport,
     PartyOrderSummary,
     CurrencyBreakdown,
+    InvoiceInput,
+    InvoiceLine,
+    InvoiceTotals,
+    InvoiceResult,
 } from "./order.types";
 import { createClient } from '@supabase/supabase-js';
-import { generateUBL, generateOrderResponseUBL } from './ubl.service';
+import { generateUBL, generateOrderResponseUBL, generateInvoiceUBL } from './ubl.service';
+import { getTaxForCountry } from './tax';
 import { AppError } from '../errors';
 import dotenv from 'dotenv';
 
@@ -1192,5 +1197,139 @@ export async function getPartyReport(
         first_order_date: sortedDates[0] ?? null,
         last_order_date: sortedDates[sortedDates.length - 1] ?? null,
         orders: orderSummaries,
+    };
+}
+
+
+/**
+ * Generates a UBL Invoice from a stored order.
+ * Pulls order, buyer, seller, and lines from Supabase,
+ * computes totals, and returns a full InvoiceResult with UBL XML.
+ */
+export async function generateInvoiceForOrder(
+    orderID: string,
+    input: InvoiceInput
+): Promise<InvoiceResult | null> {
+    const supabase = getSupabase();
+
+    // Fetch the order
+    const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderID)
+        .single();
+
+    if (orderError || !order) return null;
+
+    // Fetch buyer
+    const { data: buyer, error: buyerError } = await supabase
+        .from('parties')
+        .select('*')
+        .eq('id', order.buyer_id)
+        .single();
+
+    if (buyerError || !buyer) throw new Error('Buyer not found');
+
+    // Fetch seller
+    const { data: seller, error: sellerError } = await supabase
+        .from('parties')
+        .select('*')
+        .eq('id', order.seller_id)
+        .single();
+
+    if (sellerError || !seller) throw new Error('Seller not found');
+
+    // Fetch order lines
+    const { data: lines, error: linesError } = await supabase
+        .from('order_lines')
+        .select('*')
+        .eq('order_id', orderID);
+
+    if (linesError) throw new Error(`Failed to retrieve order lines: ${linesError.message}`);
+
+    // resolve tax from seller country; explicit tax_rate overrides the rate only
+    const countryTax = getTaxForCountry(seller.country ?? '');
+    const taxRate = input.tax_rate ?? countryTax.rate;
+    const taxName = countryTax.name;
+
+    const invoiceLines: InvoiceLine[] = (lines ?? []).map((line: any) => ({
+        line_id: line.line_id,
+        description: line.description,
+        quantity: line.quantity,
+        unit_price: line.unit_price,
+        unit_code: line.unit_code ?? 'EA',
+        line_total: Math.round(line.quantity * line.unit_price * 100) / 100,
+    }));
+
+    const lineExtensionAmount =
+        Math.round(invoiceLines.reduce((sum, l) => sum + l.line_total, 0) * 100) / 100;
+    const taxAmount = Math.round(lineExtensionAmount * taxRate * 100) / 100;
+    const taxInclusiveAmount = Math.round((lineExtensionAmount + taxAmount) * 100) / 100;
+
+    const totals: InvoiceTotals = {
+        line_extension_amount: lineExtensionAmount,
+        tax_amount: taxAmount,
+        tax_inclusive_amount: taxInclusiveAmount,
+        payable_amount: taxInclusiveAmount,
+        tax_rate: taxRate,
+        tax_name: taxName,
+    };
+
+    // Generate invoice ID and issue date
+    const { randomUUID } = await import('crypto');
+    const invoiceID = randomUUID();
+    const issueDate = input.issue_date ?? new Date().toISOString().slice(0, 10);
+
+    // Build parties in the shape generateInvoiceUBL expects
+    const buyerParty: Party = {
+        external_id: buyer.external_id,
+        name: buyer.name,
+        email: buyer.email ?? undefined,
+        street: buyer.street ?? undefined,
+        city: buyer.city ?? undefined,
+        country: buyer.country ?? undefined,
+        postal_code: buyer.postal_code ?? undefined,
+    };
+
+    const sellerParty: Party = {
+        external_id: seller.external_id,
+        name: seller.name,
+        email: seller.email ?? undefined,
+        street: seller.street ?? undefined,
+        city: seller.city ?? undefined,
+        country: seller.country ?? undefined,
+        postal_code: seller.postal_code ?? undefined,
+    };
+
+    // Generate UBL XML
+    const ublParams: Parameters<typeof generateInvoiceUBL>[0] = {
+        invoiceID,
+        orderID,
+        issueDate,
+        currency: order.currency,
+        buyer: buyerParty,
+        seller: sellerParty,
+        invoiceLines,
+        totals,
+        taxRate,
+        taxName,
+    };
+    if (input.invoice_note !== undefined) {
+        ublParams.invoiceNote = input.invoice_note;
+    }
+
+    const { ubl_xml } = generateInvoiceUBL(ublParams);
+
+    return {
+        invoice_id: invoiceID,
+        order_id: orderID,
+        issue_date: issueDate,
+        currency: order.currency,
+        buyer: buyerParty,
+        seller: sellerParty,
+        invoice_lines: invoiceLines,
+        totals,
+        ubl_xml,
+        ...(input.invoice_note !== undefined && { invoice_note: input.invoice_note }),
     };
 }
