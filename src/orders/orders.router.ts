@@ -32,8 +32,10 @@ import {
   devexListDespatches,
   devexRetrieveDespatch,
 } from '../integrations/devexDespatch';
+import { requireAuth } from '../middleware/requireAuth';
 
 const router = Router();
+router.use(requireAuth);
 
 /** Forward DevEx JSON (or text) response to the Express response. */
 async function forwardDevexResponse(
@@ -120,7 +122,7 @@ router.delete('/recurring/:id', async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    res.status(200).json(ok('Recurring order deleted successfully', result));
+    res.status(200).json(ok('Recurring order deleted successfully', { orderID: result.id ?? result }));
   } catch (err) {
     res.status(500).json(
       fail('Failed to delete recurring order', {
@@ -692,7 +694,37 @@ router.patch('/:orderID/party-country', async (req: Request, res: Response) => {
 
 // POST /orders/:id/invoice
 router.post('/:id/invoice', async (req: Request, res: Response): Promise<void> => {
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+  // Add validation here
+  const body = req.body ?? {};
+  
+  if (body.tax_rate !== undefined) {
+    if (typeof body.tax_rate !== 'number' || isNaN(body.tax_rate)) {
+      res.status(400).json(fail('Validation failed', {
+        code: 'VALIDATION_ERROR',
+        message: 'tax_rate must be a number',
+      }));
+      return;
+    }
+    if (body.tax_rate < 0 || body.tax_rate > 1) {
+      res.status(400).json(fail('Validation failed', {
+        code: 'VALIDATION_ERROR',
+        message: 'tax_rate must be between 0 and 1',
+      }));
+      return;
+    }
+  }
+
+  if (body.issue_date !== undefined) {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(body.issue_date) || isNaN(Date.parse(body.issue_date))) {
+      res.status(400).json(fail('Validation failed', {
+        code: 'VALIDATION_ERROR',
+        message: 'issue_date must be a valid date in YYYY-MM-DD format',
+      }));
+      return;
+    }
+  }
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
     res.status(500).json(
       fail('Failed to generate invoice', {
         code: 'INVOICE_ERROR',
@@ -719,6 +751,15 @@ router.post('/:id/invoice', async (req: Request, res: Response): Promise<void> =
       ok('UBL Invoice generated successfully.', result)
     );
   } catch (err: unknown) {
+    if (err instanceof AppError) {
+      res.status(err.status).json(
+        fail(err.message, {
+          code: err.code,
+          message: err.message,
+        })
+      );
+      return;
+    }
     res.status(500).json(
       fail('Failed to generate invoice', {
         code: 'INVOICE_ERROR',
