@@ -51,6 +51,10 @@ function validateOptionalString(
   }
 }
 
+function isValidCurrencyCode(code: string): boolean {
+  return /^[A-Z]{3}$/.test(code.toUpperCase());
+}
+
 function validateParty(
   fieldName: 'buyer' | 'seller',
   value: unknown,
@@ -165,6 +169,11 @@ export function validateOrderInput(body: unknown): ValidationError[] {
     errors.push({
       field: 'currency',
       message: 'currency is required',
+    });
+  } else if (!isValidCurrencyCode(body.currency)) {
+    errors.push({
+      field: 'currency',
+      message: 'currency must be a valid ISO 4217 currency code',
     });
   }
 

@@ -735,7 +735,7 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
   }
 
   try {
-    const result = await generateInvoiceForOrder(String(req.params.id), req.body);
+    const result = await generateInvoiceForOrder(String(req.params.id), body);
 
     if (result === null) {
       res.status(404).json(
