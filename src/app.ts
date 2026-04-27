@@ -9,6 +9,7 @@ import swaggerUi from 'swagger-ui-express';
 import { readFileSync } from 'fs';
 import { parse } from 'yaml';
 import { join } from 'path';
+import { requireAuth } from './middleware/requireAuth';
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ app.use(authRouter);
 // `/orders` and `/v1/orders` mount the same router (backward-compatible alias).
 app.use('/orders', ordersRouter);
 app.use('/v1/orders', ordersRouter);
-app.use('/parties', partiesRouter);
+app.use('/v2/orders', ordersRouter);
+app.use('/parties', requireAuth, partiesRouter);
 
 export default app;
