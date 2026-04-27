@@ -188,7 +188,11 @@ export async function forgotPassword(email: string): Promise<void> {
   if (!user) return; // silent — prevents user enumeration
   const token = randomBytes(32).toString('hex');
   resetTokens.set(token, { userID: user.userID, expiresAt: new Date(Date.now() + 3_600_000) });
-  await sendPasswordResetEmail(user.email, token);
+  try {
+    await sendPasswordResetEmail(user.email, token);
+  } catch (err) {
+    console.error('Failed to send password reset email:', err);
+  }
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<void> {
