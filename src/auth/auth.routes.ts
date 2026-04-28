@@ -73,13 +73,10 @@ router.post('/auth/register', (req, res) => {
 router.post('/auth/forgot-password', async (req, res) => {
   const { email } = req.body as { email?: string };
 
-  if (!email || typeof email !== 'string') {
-    return res.status(400).json(
-      fail('Validation failed', {
-        code: 'VALIDATION_ERROR',
-        message: 'Email is required.',
-      })
-    );
+  // Always return 200 to prevent user enumeration.
+  // If email is missing/invalid, treat it as a no-op.
+  if (!email || typeof email !== 'string' || email.trim() === '') {
+    return res.status(200).json(ok('If that email exists, a reset token has been sent.', null));
   }
 
   try {

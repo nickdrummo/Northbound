@@ -27,7 +27,10 @@ Northbound provides:
 - **Authentication** — User registration and login (JWT).
 - **Health check** — Service status and uptime.
 - **Orders** — Create orders, list them, retrieve UBL XML, **replace** an order (full payload) via **`PUT /orders/:id/change`** (or `/v1/orders/...`), **cancel** via **`POST /orders/:id/cancel`**, update **buyer/seller country** via **`PATCH /orders/:id/party-country`**, and manage **recurring** templates under **`/orders/recurring`**.
+- **Invoicing + tax** — Generate a UBL 2.1 Invoice from a stored order (with optional tax calculation) via **`POST /orders/:id/invoice`**.
 - **API documentation** — Interactive Swagger UI at `/docs`, backed by **OpenAPI 3** (`openapi.yaml`).
+- **Multi-language (frontend)** — UI strings can be switched between languages and are saved locally in the browser.
+- **Multi-currency (frontend)** — Orders store ISO 4217 currency codes; analytics can convert values into a base currency using live FX rates.
 
 The API uses a **standard JSON response envelope** for success and error responses so integrating clients can handle them consistently.
 
@@ -112,6 +115,8 @@ Copy from `.env.example` if present and fill in the values. Ensure `.env` is lis
 
 Base URL when running locally: **`http://localhost:3000`**. Deployed example: **`https://northbound-w6b3.onrender.com`**.
 
+Most API routes require `Authorization: Bearer <token>` (all `/orders/*` and `/parties/*` routes). Auth routes under `/auth/*` are public.
+
 | Method | Path | Description |
 | -------- | ------ | ------------- |
 | **GET** | `/docs` | **Swagger UI** — Interactive API documentation. |
@@ -127,6 +132,7 @@ Base URL when running locally: **`http://localhost:3000`**. Deployed example: **
 | **POST** | `/orders/:id/response` or `/v1/orders/:id/response` | Body: `response_code` (required), optional `issue_date`, `note`. Returns UBL **OrderResponse** XML for an existing order (not stored). Requires Supabase. |
 | **PUT** | `/orders/:id/change` or `/v1/orders/:id/change` | Replace the order with a **full** new payload (same shape as create); same `id`; returns updated UBL XML. Requires Supabase. |
 | **POST** | `/orders/:id/cancel` or `/v1/orders/:id/cancel` | Cancel (delete) the order and its line items; returns `orderID`. Requires Supabase. |
+| **POST** | `/orders/:id/invoice` or `/v1/orders/:id/invoice` | Generate a UBL Invoice from a stored order. Body supports optional `tax_rate`, `issue_date`, `invoice_note`. Requires Supabase. |
 | **POST** | `/orders/recurring` or `/v1/orders/recurring` | Create a recurring order template. |
 | **PATCH** | `/orders/recurring/:id` or `/v1/orders/recurring/:id` | Partial update of a recurring order (optional fields include `currency`, schedule, parties, `order_lines`). |
 | **DELETE** | `/orders/recurring/:id` or `/v1/orders/recurring/:id` | Delete a recurring order template. |
@@ -136,8 +142,43 @@ Base URL when running locally: **`http://localhost:3000`**. Deployed example: **
 | **POST** | `/auth/forgot-password` | Request a password reset (email in body). |
 | **POST** | `/auth/reset-password` | Complete reset with `token` and `newPassword`. |
 | **POST** | `/auth/logout` | Revoke JWT (`Authorization: Bearer …`). |
+| **GET** | `/parties/buyers/:externalID/orders` | (Auth) List all orders for a buyer (includes order lines). |
+| **GET** | `/parties/sellers/:externalID/orders` | (Auth) List all orders for a seller (includes order lines). |
+| **GET** | `/parties/buyers/:externalID/report` | (Auth) Aggregated buyer spend report (totals + currency breakdown + order summaries). |
+| **GET** | `/parties/sellers/:externalID/report` | (Auth) Aggregated seller revenue report (totals + currency breakdown + order summaries). |
 
 For full request/response schemas and examples, use **Swagger UI** at **`GET /docs`** after starting the server (spec: OpenAPI 3.0).
+
+---
+
+## Multi-language (frontend)
+
+The frontend includes a language switcher (see `frontend/src/components/layout/LanguageSwitcher.tsx`) backed by `frontend/src/context/LanguageContext.tsx`.
+
+- **Supported languages**: English (`en`), Spanish (`es`), French (`fr`), German (`de`), Chinese (`zh`).
+- **Persistence**: saved in `localStorage` under the key `northbound_language`.
+- **Fallback behavior**: missing keys fall back to English.
+
+This is a frontend feature (no backend API required).
+
+## Multi-currency (frontend + API fields)
+
+- **API**: Orders store `currency` as an ISO 4217 code (e.g. `AUD`, `USD`, `EUR`) on create/change and can be updated via `PATCH /orders/:id/detail`.
+- **Frontend default currency**: saved locally via `frontend/src/hooks/usePreferences.ts` under `northbound_preferences` (field: `defaultCurrency`).
+- **FX conversion** (analytics): the frontend can convert values into a base currency using live rates from `https://open.er-api.com/v6/latest/USD` (cached for 1 hour) via `frontend/src/hooks/useExchangeRates.ts`.
+
+## Multi-tax (invoice generation)
+
+Tax is applied when generating invoices from stored orders:
+
+- **Endpoint**: `POST /orders/:id/invoice` (also under `/v1/orders/:id/invoice`)
+- **Request body**:
+  - `tax_rate` *(optional)*: decimal (e.g. `0.1` for 10%). If omitted, the service uses the seller’s country to choose a default tax rate.
+  - `issue_date` *(optional)*: `YYYY-MM-DD` (defaults to today)
+  - `invoice_note` *(optional)*: free text note
+- **Default tax lookup**: country → rate/name mapping in `src/orders/tax.ts` (returns `{ rate: 0, name: "None" }` for unknown/missing countries).
+
+For full schemas and examples, see Swagger UI (`/docs`) → **Orders** → **Generate UBL Invoice from an order**.
 
 ### Order request body
 

@@ -190,8 +190,6 @@ paths:
       tags: [Auth]
       summary: User Logout
       description: Logs out the current user by revoking the provided bearer token.
-      requestBody:
-        required: false
       responses:
         "200":
           description: Logout successful
